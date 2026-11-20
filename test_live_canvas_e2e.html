@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PixelForge Studio - Live Canvas 13-Tool E2E Verification Matrix</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      background: #141414;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 { font-size: 18px; margin-bottom: 8px; color: #fff; }
+    #status-summary {
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #252525;
+      border: 1px solid #383838;
+    }
+    .status-pass { background: rgba(46, 204, 113, 0.15); border-color: #2ecc71; color: #2ecc71; }
+    .status-fail { background: rgba(231, 76, 60, 0.15); border-color: #e74c3c; color: #e74c3c; }
+    .test-log {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .test-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #1f1f1f;
+      border-radius: 3px;
+    }
+    .badge-pass { color: #2ecc71; font-weight: bold; }
+    .badge-fail { color: #e74c3c; font-weight: bold; }
+    iframe {
+      width: 1024px;
+      height: 700px;
+      border: 1px solid #333;
+      background: #1e1e1e;
+    }
+  </style>
+</head>
+<body>
+  <h1>PixelForge Studio — Live Canvas E2E Test Suite (All 13 Tools)</h1>
+  <div id="status-summary">Initializing Live DOM Canvas Environment...</div>
+  <div class="test-log" id="test-log"></div>
+  <iframe id="app-frame" src="index.html"></iframe>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const results = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        errors: []
+      };
+
+      const logEl = document.getElementById('test-log');
+      const summaryEl = document.getElementById('status-summary');
+      const frame = document.getElementById('app-frame');
+
+      function assert(cond, msg) {
+        if (!cond) throw new Error(msg || 'Assertion failed');
+      }
+      function assertEqual(actual, expected, msg) {
+        if (actual !== expected) throw new Error(`${msg ? msg + ': ' : ''}Expected [${expected}] but got [${actual}]`);
+      }
+      function assertClose(actual, expected, tol = 3, msg) {
+        if (Math.abs(actual - expected) > tol) throw new Error(`${msg ? msg + ': ' : ''}Expected approx [${expected}] ±${tol} but got [${actual}]`);
+      }
+
+      function logTest(name, ok, err) {
+        results.total++;
+        if (ok) {
+          results.passed++;
+          console.log('[E2E-PASS] ' + name);
+        } else {
+          results.failed++;
+          results.errors.push({ name, err: String(err) });
+          console.log('[E2E-FAIL] ' + name + ' : ' + err);
+        }
+
+        const div = document.createElement('div');
+        div.className = 'test-item';
+        div.innerHTML = `<span>${name}</span><span class="${ok ? 'badge-pass' : 'badge-fail'}">${ok ? '✓ PASS' : '✗ FAIL'}</span>`;
+        if (!ok && err) {
+          const detail = document.createElement('div');
+          detail.style.color = '#ff6b6b';
+          detail.style.fontSize = '11px';
+          detail.style.padding = '4px 10px';
+          detail.textContent = String(err);
+          div.appendChild(detail);
+        }
+        logEl.appendChild(div);
+      }
+
+      frame.onload = async () => {
+        const win = frame.contentWindow;
+        const doc = frame.contentDocument;
+
+        // Mock blocking dialogs defensively
+        win.confirm = () => true;
+        win.prompt = (msg, def) => def || 'PixelForge';
+
+        const PF = win.PixelForge;
+        if (!PF || !PF.currentEngine || !PF.currentUI) {
+          logTest('Environment Initialization', false, 'PixelForge engine or UI missing');
+          return;
+        }
+
+        const engine = PF.currentEngine;
+        const ui = PF.currentUI;
+        const overlayCanvas = doc.getElementById('overlay-canvas');
+        const mainCanvas = doc.getElementById('main-canvas');
+
+        assert(overlayCanvas && mainCanvas, 'Overlay and main canvases present');
+
+        // Helper to simulate pointer events on overlay canvas
+        function dispatchCanvas(type, canvasX, canvasY, button = 0) {
+          const screen = engine.canvasToScreen(canvasX, canvasY);
+          const pEvent = new win.PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            view: win,
+            clientX: screen.x,
+            clientY: screen.y,
+            button,
+            buttons: type === 'pointerup' ? 0 : 1,
+            pointerId: 1,
+            isPrimary: true
+          });
+          overlayCanvas.dispatchEvent(pEvent);
+
+          const mType = type.replace('pointer', 'mouse');
+          const mEvent = new win.MouseEvent(mType, {
+            bubbles: true,
+            cancelable: true,
+            view: win,
+            clientX: screen.x,
+            clientY: screen.y,
+            button,
+            buttons: type === 'pointerup' ? 0 : 1
+          });
+          overlayCanvas.dispatchEvent(mEvent);
+        }
+
+        function clickToolbox(toolId) {
+          const btn = doc.querySelector(`#toolbox [data-tool="${toolId}"]`);
+          if (btn) btn.click();
+          else ui.selectTool(toolId);
+        }
+
+        // =====================================================================
+        // TEST 1: Tool 1 - Smooth Blend Painter (brush)
+        // =====================================================================
+        try {
+          clickToolbox('brush');
+          assertEqual(ui.activeTool.id, 'brush');
+          assertEqual(ui.activeTool.name, 'Smooth Blend Painter');
+
+          ui.activeTool.options.size = 16;
+          ui.activeTool.options.hardness = 90;
+          ui.activeTool.options.opacity = 100;
+          engine.setFgColor('#ff0055');
+
+          const l = engine.getActiveLayer();
+          const startPix = l.ctx.getImageData(120, 100, 1, 1).data;
+
+          dispatchCanvas('pointerdown', 100, 100);
+          dispatchCanvas('pointermove', 120, 100);
+          dispatchCanvas('pointermove', 140, 100);
+          dispatchCanvas('pointerup', 140, 100);
+
+          const endPix = l.ctx.getImageData(120, 100, 1, 1).data;
+          assert(endPix[0] > 200, `Red channel modified (${endPix[0]})`);
+          assert(endPix[3] > 100, `Alpha channel modified (${endPix[3]})`);
+          logTest('Tool 1: Smooth Blend Painter (brush) paints pixels onto canvas', true);
+        } catch (e) {
+          logTest('Tool 1: Smooth Blend Painter (brush) paints pixels onto canvas', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 2: Tool 2 - Precision Pixel Writer (pencil)
+        // =====================================================================
+        try {
+          clickToolbox('pencil');
+          assertEqual(ui.activeTool.id, 'pencil');
+          assertEqual(ui.activeTool.name, 'Precision Pixel Writer');
+
+          ui.activeTool.options.size = 1;
+          engine.setFgColor('#00ccff');
+          const l = engine.getActiveLayer();
+
+          dispatchCanvas('pointerdown', 220, 180);
+          dispatchCanvas('pointerup', 220, 180);
+
+          const pix = l.ctx.getImageData(220, 180, 1, 1).data;
+          assertEqual(pix[0], 0, 'R channel');
+          assertEqual(pix[1], 0xcc, 'G channel');
+          assertEqual(pix[2], 0xff, 'B channel');
+          assertEqual(pix[3], 255, 'A channel');
+          logTest('Tool 2: Precision Pixel Writer (pencil) marks 1px pixel on canvas', true);
+        } catch (e) {
+          logTest('Tool 2: Precision Pixel Writer (pencil) marks 1px pixel on canvas', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 3: Tool 3 - Alpha Clearing Tool (eraser)
+        // =====================================================================
+        try {
+          clickToolbox('eraser');
+          assertEqual(ui.activeTool.id, 'eraser');
+          assertEqual(ui.activeTool.name, 'Alpha Clearing Tool');
+
+          ui.activeTool.options.size = 20;
+          ui.activeTool.options.opacity = 100;
+          ui.activeTool.options.hardness = 100;
+
+          // Erase the pixel painted by pencil at (220, 180)
+          dispatchCanvas('pointerdown', 220, 180);
+          dispatchCanvas('pointerup', 220, 180);
+
+          const l = engine.getActiveLayer();
+          const pix = l.ctx.getImageData(220, 180, 1, 1).data;
+          assertEqual(pix[3], 0, `Alpha channel erased to 0 (got ${pix[3]})`);
+          logTest('Tool 3: Alpha Clearing Tool (eraser) clears canvas pixels to transparent', true);
+        } catch (e) {
+          logTest('Tool 3: Alpha Clearing Tool (eraser) clears canvas pixels to transparent', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 4: Tool 4 - Contiguous Area Flood (bucket)
+        // =====================================================================
+        try {
+          const l = engine.getActiveLayer();
+          // Draw a black boundary box 200..250, 200..250
+          l.ctx.strokeStyle = '#000000';
+          l.ctx.lineWidth = 2;
+          l.ctx.strokeRect(200, 200, 50, 50);
+
+          clickToolbox('bucket');
+          assertEqual(ui.activeTool.id, 'bucket');
+          assertEqual(ui.activeTool.name, 'Contiguous Area Flood');
+
+          engine.setFgColor('#ffaa00');
+          ui.activeTool.options.tolerance = 20;
+
+          dispatchCanvas('pointerdown', 225, 225);
+          dispatchCanvas('pointerup', 225, 225);
+
+          const insidePix = l.ctx.getImageData(225, 225, 1, 1).data;
+          assertEqual(insidePix[0], 255, 'Filled R');
+          assertEqual(insidePix[1], 170, 'Filled G');
+          assertEqual(insidePix[2], 0, 'Filled B');
+
+          // Verify outside remains transparent/unfilled
+          const outsidePix = l.ctx.getImageData(180, 180, 1, 1).data;
+          assert(outsidePix[0] !== 255 || outsidePix[1] !== 170, 'Outside region bounded');
+          logTest('Tool 4: Contiguous Area Flood (bucket) flood fills bounded area', true);
+        } catch (e) {
+          logTest('Tool 4: Contiguous Area Flood (bucket) flood fills bounded area', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 5: Tool 5 - Pixel Color Sampler (picker)
+        // =====================================================================
+        try {
+          clickToolbox('picker');
+          assertEqual(ui.activeTool.id, 'picker');
+          assertEqual(ui.activeTool.name, 'Pixel Color Sampler');
+
+          // Pick the #ffaa00 color we filled at (225, 225)
+          engine.render(); // Ensure composite is fresh
+          dispatchCanvas('pointerdown', 225, 225);
+          dispatchCanvas('pointerup', 225, 225);
+
+          const sampledHex = engine.fgColor.toLowerCase();
+          assert(sampledHex === '#ffaa00' || sampledHex === '#ffa900' || sampledHex === '#ffaa01', `Sampled color ${sampledHex}`);
+          logTest('Tool 5: Pixel Color Sampler (picker) samples pixel color from canvas', true);
+        } catch (e) {
+          logTest('Tool 5: Pixel Color Sampler (picker) samples pixel color from canvas', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 6: Tool 6 - Box Area Selector (rect-select)
+        // =====================================================================
+        try {
+          clickToolbox('rect-select');
+          assertEqual(ui.activeTool.id, 'rect-select');
+          assertEqual(ui.activeTool.name, 'Box Area Selector');
+
+          dispatchCanvas('pointerdown', 40, 40);
+          dispatchCanvas('pointermove', 160, 120);
+          dispatchCanvas('pointerup', 160, 120);
+
+          assert(engine.selection && engine.selection.active, 'Selection active');
+          assert(engine.selection.bounds, 'Selection bounds present');
+          assertClose(engine.selection.bounds.x, 40, 4, 'Bounds X');
+          assertClose(engine.selection.bounds.y, 40, 4, 'Bounds Y');
+          assertClose(engine.selection.bounds.width, 120, 4, 'Bounds Width');
+          assertClose(engine.selection.bounds.height, 80, 4, 'Bounds Height');
+          logTest('Tool 6: Box Area Selector (rect-select) defines rectangular selection', true);
+        } catch (e) {
+          logTest('Tool 6: Box Area Selector (rect-select) defines rectangular selection', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 7: Tool 7 - Oval Area Selector (ellipse-select)
+        // =====================================================================
+        try {
+          clickToolbox('ellipse-select');
+          assertEqual(ui.activeTool.id, 'ellipse-select');
+          assertEqual(ui.activeTool.name, 'Oval Area Selector');
+
+          dispatchCanvas('pointerdown', 200, 50);
+          dispatchCanvas('pointermove', 320, 150);
+          dispatchCanvas('pointerup', 320, 150);
+
+          assert(engine.selection && engine.selection.active, 'Selection active');
+          assert(engine.selection.bounds, 'Ellipse bounds present');
+          assertClose(engine.selection.bounds.width, 120, 4, 'Ellipse Width');
+          assertClose(engine.selection.bounds.height, 100, 4, 'Ellipse Height');
+          logTest('Tool 7: Oval Area Selector (ellipse-select) defines elliptical selection', true);
+        } catch (e) {
+          logTest('Tool 7: Oval Area Selector (ellipse-select) defines elliptical selection', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 8: Tool 8 - Freeform Outline Selector (lasso)
+        // =====================================================================
+        try {
+          clickToolbox('lasso');
+          assertEqual(ui.activeTool.id, 'lasso');
+          assertEqual(ui.activeTool.name, 'Freeform Outline Selector');
+
+          dispatchCanvas('pointerdown', 350, 40);
+          dispatchCanvas('pointermove', 420, 60);
+          dispatchCanvas('pointermove', 400, 120);
+          dispatchCanvas('pointermove', 340, 90);
+          dispatchCanvas('pointerup', 340, 90);
+
+          assert(engine.selection && engine.selection.active, 'Lasso selection active');
+          logTest('Tool 8: Freeform Outline Selector (lasso) defines polygon selection contour', true);
+        } catch (e) {
+          logTest('Tool 8: Freeform Outline Selector (lasso) defines polygon selection contour', false, e.message);
+        }
+
+        // Clear selection for clean subsequent tests
+        engine.clearSelection();
+
+        // =====================================================================
+        // TEST 9: Tool 9 - Layer Position Shifter (move)
+        // =====================================================================
+        try {
+          clickToolbox('move');
+          assertEqual(ui.activeTool.id, 'move');
+          assertEqual(ui.activeTool.name, 'Layer Position Shifter');
+
+          const l = engine.getActiveLayer();
+          const startX = l.x;
+          const startY = l.y;
+
+          dispatchCanvas('pointerdown', 100, 100);
+          dispatchCanvas('pointermove', 150, 130);
+          dispatchCanvas('pointerup', 150, 130);
+
+          assertEqual(l.x, startX + 50, 'Layer X translation');
+          assertEqual(l.y, startY + 30, 'Layer Y translation');
+          logTest('Tool 9: Layer Position Shifter (move) translates layer position', true);
+        } catch (e) {
+          logTest('Tool 9: Layer Position Shifter (move) translates layer position', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 10: Tool 10 - Canvas Frame Trimmer (crop)
+        // =====================================================================
+        try {
+          clickToolbox('crop');
+          assertEqual(ui.activeTool.id, 'crop');
+          assertEqual(ui.activeTool.name, 'Canvas Frame Trimmer');
+
+          const origW = engine.width;
+          const origH = engine.height;
+
+          dispatchCanvas('pointerdown', 10, 10);
+          dispatchCanvas('pointermove', 410, 310);
+          dispatchCanvas('pointerup', 410, 310);
+
+          // Verify crop rect created and commit crop
+          assert(ui.activeTool.cropRect, 'Crop frame rect defined on canvas');
+          ui.activeTool.commitCrop(engine);
+
+          assertEqual(engine.width, 400, 'Canvas cropped width');
+          assertEqual(engine.height, 300, 'Canvas cropped height');
+          logTest('Tool 10: Canvas Frame Trimmer (crop) crops and trims canvas dimensions', true);
+        } catch (e) {
+          logTest('Tool 10: Canvas Frame Trimmer (crop) crops and trims canvas dimensions', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 11: Tool 11 - Typography Rasterizer (text)
+        // =====================================================================
+        try {
+          clickToolbox('text');
+          assertEqual(ui.activeTool.id, 'text');
+          assertEqual(ui.activeTool.name, 'Typography Rasterizer');
+
+          ui.activeTool.options.text = 'LIVE_TEST';
+          ui.activeTool.options.fontSize = 24;
+          engine.setFgColor('#ffffff');
+
+          const initialLayerCount = engine.layerManager.layers.length;
+
+          dispatchCanvas('pointerdown', 50, 50);
+          dispatchCanvas('pointerup', 50, 50);
+
+          assert(engine.layerManager.layers.length > initialLayerCount, 'New typography layer added');
+          const textLayer = engine.getActiveLayer();
+          assert(textLayer.name.includes('Type') || textLayer.name.includes('LIVE_TEST'), `Text layer name: ${textLayer.name}`);
+
+          const textData = textLayer.ctx.getImageData(0, 0, 200, 100).data;
+          let hasGlyph = false;
+          for (let i = 3; i < textData.length; i += 4) {
+            if (textData[i] > 50) { hasGlyph = true; break; }
+          }
+          assert(hasGlyph, 'Typography glyphs rasterized onto canvas layer');
+          logTest('Tool 11: Typography Rasterizer (text) rasterizes typography to canvas', true);
+        } catch (e) {
+          logTest('Tool 11: Typography Rasterizer (text) rasterizes typography to canvas', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 12: Tool 12 - Canvas Magnifier (zoom)
+        // =====================================================================
+        try {
+          clickToolbox('zoom');
+          assertEqual(ui.activeTool.id, 'zoom');
+          assertEqual(ui.activeTool.name, 'Canvas Magnifier');
+
+          const initialZoom = engine.zoom;
+
+          dispatchCanvas('pointerdown', 100, 100);
+          dispatchCanvas('pointerup', 100, 100);
+
+          assert(engine.zoom > initialZoom, `Zoom level increased from ${initialZoom} to ${engine.zoom}`);
+          logTest('Tool 12: Canvas Magnifier (zoom) scales canvas viewport zoom', true);
+        } catch (e) {
+          logTest('Tool 12: Canvas Magnifier (zoom) scales canvas viewport zoom', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 13: Tool 13 - Viewport Canvas Scroller (pan)
+        // =====================================================================
+        try {
+          clickToolbox('pan');
+          assertEqual(ui.activeTool.id, 'pan');
+          assertEqual(ui.activeTool.name, 'Viewport Canvas Scroller');
+
+          const initialPanX = engine.panX;
+          const initialPanY = engine.panY;
+
+          dispatchCanvas('pointerdown', 200, 200);
+          dispatchCanvas('pointermove', 160, 150);
+          dispatchCanvas('pointerup', 160, 150);
+
+          const changed = (engine.panX !== initialPanX) || (engine.panY !== initialPanY);
+          assert(changed, `Pan offset updated (panX: ${engine.panX}, panY: ${engine.panY})`);
+          logTest('Tool 13: Viewport Canvas Scroller (pan) scrolls canvas viewport coordinates', true);
+        } catch (e) {
+          logTest('Tool 13: Viewport Canvas Scroller (pan) scrolls canvas viewport coordinates', false, e.message);
+        }
+
+        // =====================================================================
+        // FINAL SUMMARY
+        // =====================================================================
+        const allOk = results.failed === 0 && results.errors.length === 0;
+        summaryEl.className = allOk ? 'status-pass' : 'status-fail';
+        summaryEl.textContent = `Live Canvas E2E Matrix Complete: ${results.passed} / ${results.total} Passed, ${results.failed} Failed.`;
+
+        console.log(`[E2E-SUMMARY] Total: ${results.total} | Passed: ${results.passed} | Failed: ${results.failed}`);
+        console.log('[E2E-COMPLETE]');
+
+        window.__E2E_RESULTS__ = results;
+        setTimeout(() => {
+          if (typeof window.close === 'function') window.close();
+        }, 150);
+      };
+    })();
+  </script>
+</body>
+</html>

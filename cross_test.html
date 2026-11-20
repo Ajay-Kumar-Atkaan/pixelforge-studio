@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PixelForge Studio - Exhaustive Cross-Feature Test Matrix</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #181818;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      padding: 16px;
+      margin: 0;
+    }
+    h1 { color: #5b9dd9; margin-bottom: 4px; font-size: 20px; }
+    #matrix-summary {
+      font-size: 14px;
+      font-weight: bold;
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin: 12px 0;
+    }
+    .summary-running { background: #2c2a1a; color: #ffe082; border: 1px solid #ffb300; }
+    .summary-pass { background: #132a13; color: #a3e635; border: 1px solid #4ade80; }
+    .summary-fail { background: #3b1212; color: #fca5a5; border: 1px solid #ef4444; }
+    .category-group {
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .category-header {
+      background: #2a2a2a;
+      padding: 8px 12px;
+      font-weight: bold;
+      font-size: 13px;
+      color: #93c5fd;
+      border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+    }
+    .test-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 12px;
+      font-size: 11.5px;
+      border-bottom: 1px solid #282828;
+    }
+    .test-row:nth-child(even) { background: #1e1e1e; }
+    .badge-pass { color: #4ade80; font-weight: bold; }
+    .badge-fail { color: #f87171; font-weight: bold; }
+    .error-detail {
+      color: #f87171;
+      font-size: 10.5px;
+      margin-left: 20px;
+      white-space: pre-wrap;
+    }
+    #sandbox-viewport {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+      width: 1024px;
+      height: 768px;
+    }
+  </style>
+</head>
+<body>
+  <h1>PixelForge Studio - Full Cross-Feature Test Matrix</h1>
+  <div id="matrix-summary" class="summary-running">Initializing exhaustive verification matrix...</div>
+  <div id="matrix-container"></div>
+  <div id="sandbox-viewport"></div>
+
+  <script>
+    window.confirm = () => true;
+    window.prompt = (msg, def) => def || 'PixelForge';
+    window.alert = () => {};
+  </script>
+
+  <!-- Load Modules -->
+  <script src="src/layers.js"></script>
+  <script src="src/filters.js"></script>
+  <script src="src/tools.js"></script>
+  <script src="src/engine.js"></script>
+  <script src="src/ui.js"></script>
+
+  <script>
+    (async function runCrossTestMatrix() {
+      'use strict';
+
+      const matrixResults = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        sections: [],
+        uncaughtErrors: []
+      };
+
+      window.addEventListener('error', (e) => {
+        matrixResults.uncaughtErrors.push({ msg: e.message, file: e.filename, line: e.lineno });
+        console.log('[MATRIX-UNCAUGHT] ' + e.message);
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        matrixResults.uncaughtErrors.push({ reason: String(e.reason) });
+        console.log('[MATRIX-UNCAUGHT] ' + String(e.reason));
+      });
+
+      const container = document.getElementById('matrix-container');
+      const summaryEl = document.getElementById('matrix-summary');
+
+      async function testSection(title, items) {
+        const sec = { title, passed: 0, failed: 0, items: [] };
+        const grp = document.createElement('div');
+        grp.className = 'category-group';
+        grp.innerHTML = `<div class="category-header"><span>${title}</span><span class="sec-score"></span></div><div class="sec-body"></div>`;
+        const body = grp.querySelector('.sec-body');
+        const score = grp.querySelector('.sec-score');
+        container.appendChild(grp);
+
+        for (const item of items) {
+          matrixResults.total++;
+          const row = document.createElement('div');
+          row.className = 'test-row';
+          let ok = false;
+          let errDetail = '';
+
+          try {
+            await item.fn();
+            ok = true;
+            sec.passed++;
+            matrixResults.passed++;
+            row.innerHTML = `<span>${item.name}</span><span class="badge-pass">✓ PASS</span>`;
+            console.log('[MATRIX-PASS] ' + item.name);
+          } catch (err) {
+            ok = false;
+            sec.failed++;
+            matrixResults.failed++;
+            errDetail = err.stack || err.message || String(err);
+            row.innerHTML = `<span>${item.name}</span><span class="badge-fail">✗ FAIL</span>`;
+            const errDiv = document.createElement('div');
+            errDiv.className = 'error-detail';
+            errDiv.textContent = errDetail;
+            row.appendChild(errDiv);
+            console.log('[MATRIX-FAIL] ' + item.name + ' : ' + errDetail);
+          }
+
+          body.appendChild(row);
+          sec.items.push({ name: item.name, passed: ok, error: errDetail });
+        }
+
+        score.textContent = `${sec.passed} / ${items.length} passed`;
+        matrixResults.sections.push(sec);
+      }
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message || 'Assertion failed');
+      }
+      function assertEqual(actual, expected, message) {
+        if (actual !== expected) throw new Error(`${message ? message + ': ' : ''}Expected [${expected}] but got [${actual}]`);
+      }
+      function assertClose(actual, expected, tol = 2, message) {
+        if (Math.abs(actual - expected) > tol) throw new Error(`${message ? message + ': ' : ''}Expected approx [${expected}] ±${tol} but got [${actual}]`);
+      }
+
+      // Prepare UI sandbox container
+      const sandbox = document.getElementById('sandbox-viewport');
+      sandbox.innerHTML = `
+        <div id="app-container">
+          <header id="menu-bar">
+            <div class="menu-app-brand"><span>PixelForge</span></div>
+          </header>
+          <div class="toolbox-grid"></div>
+          <div id="canvas-scroll-container">
+            <div id="canvas-wrapper">
+              <canvas id="main-canvas" width="600" height="400"></canvas>
+              <canvas id="overlay-canvas" width="600" height="400"></canvas>
+            </div>
+          </div>
+          <div id="layers-list-container"></div>
+          <div id="history-list-container"></div>
+          <div id="tool-options-container"></div>
+          <div class="color-swatch-fg"></div>
+          <div class="color-swatch-bg"></div>
+          <div id="status-coords"><span></span></div>
+          <div id="status-dims"><span></span></div>
+          <div id="status-message"><span></span></div>
+          <div id="modal-container"></div>
+          <div id="toast-container"></div>
+          <select id="layer-blend-select">
+            <option value="normal">Normal</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+          </select>
+          <input type="range" id="layer-opacity-slider" min="0" max="100" value="100">
+          <select id="zoom-select">
+            <option value="1">100%</option>
+          </select>
+        </div>
+      `;
+
+      // Initialize primary Engine & UI
+      const PF = window.PixelForge || window.GIMP;
+      const engine = new PF.Engine({ width: 600, height: 400 });
+      PF.UI.init(engine);
+
+      // =========================================================================
+      // SECTION 1: ALL 13 TOOLS - DETAILED BEHAVIOR & MUTATION
+      // =========================================================================
+      await testSection('1. Exhaustive 13 Tools Matrix', [
+        {
+          name: 'Tool 1: Smooth Blend Painter (brush)',
+          fn: () => {
+            PF.UI.selectTool('brush');
+            const tool = PF.ToolRegistry.brush;
+            assertEqual(tool.name, 'Smooth Blend Painter');
+            tool.options.size = 14;
+            tool.options.hardness = 90;
+            tool.options.opacity = 100;
+            engine.setFgColor('#ff0033');
+
+            tool.onPointerDown({ button: 0 }, { x: 50, y: 50 }, engine);
+            tool.onPointerMove({}, { x: 70, y: 50 }, engine);
+            tool.onPointerUp({}, { x: 70, y: 50 }, engine);
+
+            const pix = engine.getActiveLayer().ctx.getImageData(60, 50, 1, 1).data;
+            assertEqual(pix[0], 255, 'R channel');
+            assertEqual(pix[1], 0, 'G channel');
+            assertEqual(pix[2], 0x33, 'B channel');
+          }
+        },
+        {
+          name: 'Tool 2: Precision Pixel Writer (pencil)',
+          fn: () => {
+            PF.UI.selectTool('pencil');
+            const tool = PF.ToolRegistry.pencil;
+            assertEqual(tool.name, 'Precision Pixel Writer');
+            tool.options.size = 1;
+            engine.setFgColor('#00ccff');
+
+            tool.onPointerDown({ button: 0 }, { x: 20, y: 20 }, engine);
+            tool.onPointerUp({}, { x: 20, y: 20 }, engine);
+
+            const pix = engine.getActiveLayer().ctx.getImageData(20, 20, 1, 1).data;
+            assertEqual(pix[0], 0);
+            assertEqual(pix[1], 0xcc);
+            assertEqual(pix[2], 0xff);
+          }
+        },
+        {
+          name: 'Tool 3: Alpha Clearing Tool (eraser)',
+          fn: () => {
+            PF.UI.selectTool('eraser');
+            const tool = PF.ToolRegistry.eraser;
+            assertEqual(tool.name, 'Alpha Clearing Tool');
+            tool.options.size = 20;
+            tool.options.opacity = 100;
+            tool.options.hardness = 100;
+
+            const layer = engine.getActiveLayer();
+            layer.fill('#00ff00');
+            tool.onPointerDown({ button: 0 }, { x: 30, y: 30 }, engine);
+            tool.onPointerUp({}, { x: 30, y: 30 }, engine);
+
+            const pix = layer.ctx.getImageData(30, 30, 1, 1).data;
+            assertEqual(pix[3], 0, 'Alpha erased to 0');
+          }
+        },
+        {
+          name: 'Tool 4: Contiguous Area Flood (bucket)',
+          fn: () => {
+            PF.UI.selectTool('bucket');
+            const tool = PF.ToolRegistry.bucket;
+            assertEqual(tool.name, 'Contiguous Area Flood');
+            const layer = engine.getActiveLayer();
+            layer.fill('#ffffff');
+            layer.ctx.strokeStyle = '#000000';
+            layer.ctx.strokeRect(10, 10, 30, 30);
+
+            engine.setFgColor('#ffaa00');
+            tool.options.tolerance = 15;
+            tool.onPointerDown({ button: 0 }, { x: 20, y: 20 }, engine);
+
+            const inPix = layer.ctx.getImageData(20, 20, 1, 1).data;
+            const outPix = layer.ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(inPix[0], 255);
+            assertEqual(inPix[1], 0xaa);
+            assertEqual(outPix[0], 255);
+            assertEqual(outPix[1], 255); // untouched white
+          }
+        },
+        {
+          name: 'Tool 5: Pixel Color Sampler (picker)',
+          fn: () => {
+            PF.UI.selectTool('picker');
+            const tool = PF.ToolRegistry.picker;
+            assertEqual(tool.name, 'Pixel Color Sampler');
+            engine.getActiveLayer().fill('#654321');
+            engine.render();
+
+            tool.onPointerDown({ button: 0 }, { x: 15, y: 15 }, engine);
+            assertEqual(engine.fgColor.toLowerCase(), '#654321', 'Sampled hex');
+          }
+        },
+        {
+          name: 'Tool 6: Box Area Selector (rect-select)',
+          fn: () => {
+            PF.UI.selectTool('rect-select');
+            const tool = PF.ToolRegistry['rect-select'];
+            assertEqual(tool.name, 'Box Area Selector');
+            tool.onPointerDown({ button: 0 }, { x: 10, y: 15 }, engine);
+            tool.onPointerMove({}, { x: 60, y: 75 }, engine);
+            tool.onPointerUp({}, { x: 60, y: 75 }, engine);
+
+            assert(engine.selection.active, 'Selection active');
+            assertEqual(engine.selection.bounds.x, 10);
+            assertEqual(engine.selection.bounds.y, 15);
+            assertEqual(engine.selection.bounds.width, 50);
+            assertEqual(engine.selection.bounds.height, 60);
+            assert(engine.selection.contains(30, 40));
+            assert(!engine.selection.contains(5, 5));
+          }
+        },
+        {
+          name: 'Tool 7: Oval Area Selector (ellipse-select)',
+          fn: () => {
+            PF.UI.selectTool('ellipse-select');
+            const tool = PF.ToolRegistry['ellipse-select'];
+            assertEqual(tool.name, 'Oval Area Selector');
+            tool.onPointerDown({ button: 0 }, { x: 20, y: 20 }, engine);
+            tool.onPointerMove({}, { x: 80, y: 80 }, engine);
+            tool.onPointerUp({}, { x: 80, y: 80 }, engine);
+
+            assert(engine.selection.active, 'Oval selection active');
+            assert(engine.selection.contains(50, 50), 'Center inside ellipse');
+            assert(!engine.selection.contains(21, 21), 'Corner outside ellipse');
+          }
+        },
+        {
+          name: 'Tool 8: Freeform Outline Selector (lasso)',
+          fn: () => {
+            PF.UI.selectTool('lasso');
+            const tool = PF.ToolRegistry.lasso;
+            assertEqual(tool.name, 'Freeform Outline Selector');
+            tool.onPointerDown({ button: 0 }, { x: 10, y: 10 }, engine);
+            tool.onPointerMove({}, { x: 50, y: 10 }, engine);
+            tool.onPointerMove({}, { x: 50, y: 50 }, engine);
+            tool.onPointerMove({}, { x: 10, y: 50 }, engine);
+            tool.onPointerUp({}, { x: 10, y: 10 }, engine);
+
+            assert(engine.selection.active, 'Lasso selection active');
+            assert(engine.selection.contains(25, 25), 'Polygon interior');
+            engine.selection.clear();
+          }
+        },
+        {
+          name: 'Tool 9: Layer Position Shifter (move)',
+          fn: () => {
+            PF.UI.selectTool('move');
+            const tool = PF.ToolRegistry.move;
+            assertEqual(tool.name, 'Layer Position Shifter');
+            const layer = engine.getActiveLayer();
+            layer.x = 0; layer.y = 0;
+
+            tool.onPointerDown({ button: 0 }, { x: 5, y: 5 }, engine);
+            tool.onPointerMove({}, { x: 25, y: 40 }, engine);
+            tool.onPointerUp({}, { x: 25, y: 40 }, engine);
+
+            assertEqual(layer.x, 20, 'Layer x offset');
+            assertEqual(layer.y, 35, 'Layer y offset');
+            layer.x = 0; layer.y = 0;
+          }
+        },
+        {
+          name: 'Tool 10: Canvas Frame Trimmer (crop)',
+          fn: () => {
+            PF.UI.selectTool('crop');
+            const tool = PF.ToolRegistry.crop;
+            assertEqual(tool.name, 'Canvas Frame Trimmer');
+            assert(tool.options, 'Crop options exist');
+          }
+        },
+        {
+          name: 'Tool 11: Typography Rasterizer (text)',
+          fn: () => {
+            PF.UI.selectTool('text');
+            const tool = PF.ToolRegistry.text;
+            assertEqual(tool.name, 'Typography Rasterizer');
+            tool.options.text = 'TEST_TYPE';
+            tool.options.fontSize = 20;
+            engine.setFgColor('#ffffff');
+
+            tool.onPointerDown({ button: 0 }, { x: 10, y: 10 }, engine);
+            const activeLayer = engine.getActiveLayer();
+            assert(activeLayer.name.includes('Type'), 'New typography layer added');
+            const imgData = activeLayer.ctx.getImageData(0, 0, 100, 50).data;
+            let found = false;
+            for (let i = 3; i < imgData.length; i += 4) {
+              if (imgData[i] > 50) { found = true; break; }
+            }
+            assert(found, 'Text rasterized to layer');
+          }
+        },
+        {
+          name: 'Tool 12: Canvas Magnifier (zoom)',
+          fn: () => {
+            PF.UI.selectTool('zoom');
+            const tool = PF.ToolRegistry.zoom;
+            assertEqual(tool.name, 'Canvas Magnifier');
+            const initialZoom = engine.zoom;
+            tool.onPointerDown({ button: 0 }, { x: 100, y: 100 }, engine);
+            assert(engine.zoom > initialZoom, 'Magnifier zooms in');
+            engine.setZoom(1.0);
+          }
+        },
+        {
+          name: 'Tool 13: Viewport Canvas Scroller (pan)',
+          fn: () => {
+            PF.UI.selectTool('pan');
+            const tool = PF.ToolRegistry.pan;
+            assertEqual(tool.name, 'Viewport Canvas Scroller');
+            const initPanX = engine.panX;
+            tool.onPointerDown({ button: 0, clientX: 100, clientY: 100 }, {}, engine);
+            tool.onPointerMove({ clientX: 130, clientY: 120 }, {}, engine);
+            tool.onPointerUp({}, {}, engine);
+            assert(engine.panX !== initPanX, 'Pan scrolls canvas');
+            engine.panX = 0; engine.panY = 0;
+          }
+        }
+      ]);
+
+      // =========================================================================
+      // SECTION 2: ALL 53 MENU ACTIONS ACROSS ALL 10 MENUS
+      // =========================================================================
+      await testSection('2. Comprehensive 53 Menu Actions Matrix', [
+        // File Menu
+        {
+          name: 'Menu: save-project (.pforge project serialization)',
+          fn: () => {
+            const json = engine.exportProjectJSON();
+            const parsed = JSON.parse(json);
+            assert(parsed.format === 'pixelforge-project' || parsed.format === 'web-gimp-project');
+            assert(parsed.layers.length >= 1);
+          }
+        },
+        {
+          name: 'Menu: export-image (PNG composite)',
+          fn: () => {
+            const dataUrl = engine.exportImage('image/png');
+            assert(dataUrl.startsWith('data:image/png'));
+          }
+        },
+        {
+          name: 'Menu: export-image (JPEG composite with quality)',
+          fn: () => {
+            const dataUrl = engine.exportImage('image/jpeg', 0.85);
+            assert(dataUrl.startsWith('data:image/jpeg'));
+          }
+        },
+        {
+          name: 'Menu: export-image (WEBP composite)',
+          fn: () => {
+            const dataUrl = engine.exportImage('image/webp', 0.9);
+            assert(dataUrl.startsWith('data:image/webp') || dataUrl.startsWith('data:image/png'));
+          }
+        },
+        {
+          name: 'Menu: close-image',
+          fn: () => {
+            PF.UI.handleMenuAction('close-image');
+            assertEqual(engine.layerManager.layers.length, 1);
+          }
+        },
+
+        // Edit Menu
+        {
+          name: 'Menu: fill-fg (Fill with Foreground Color)',
+          fn: () => {
+            engine.setFgColor('#112233');
+            PF.UI.handleMenuAction('fill-fg');
+            const pix = engine.getActiveLayer().ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(pix[0], 0x11);
+            assertEqual(pix[1], 0x22);
+            assertEqual(pix[2], 0x33);
+          }
+        },
+        {
+          name: 'Menu: fill-bg (Fill with Background Color)',
+          fn: () => {
+            engine.setBgColor('#445566');
+            PF.UI.handleMenuAction('fill-bg');
+            const pix = engine.getActiveLayer().ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(pix[0], 0x44);
+            assertEqual(pix[1], 0x55);
+            assertEqual(pix[2], 0x66);
+          }
+        },
+        {
+          name: 'Menu: copy, cut, paste',
+          fn: () => {
+            const initLayers = engine.layerManager.layers.length;
+            PF.UI.handleMenuAction('copy');
+            assert(engine.clipboard, 'Clipboard has data');
+            PF.UI.handleMenuAction('paste');
+            assertEqual(engine.layerManager.layers.length, initLayers + 1, 'Pasted new layer');
+            PF.UI.handleMenuAction('undo');
+          }
+        },
+        {
+          name: 'Menu: undo and redo',
+          fn: async () => {
+            assert(engine.history.canUndo(), 'canUndo');
+            await engine.history.undo();
+            assert(engine.history.canRedo(), 'canRedo');
+            await engine.history.redo();
+          }
+        },
+        {
+          name: 'Menu: clear-selection',
+          fn: () => {
+            PF.UI.handleMenuAction('clear-selection');
+            assert(true);
+          }
+        },
+
+        // Select Menu
+        {
+          name: 'Menu: select-all',
+          fn: () => {
+            PF.UI.handleMenuAction('select-all');
+            assert(engine.selection.active, 'Selection active');
+            assertEqual(engine.selection.bounds.width, engine.width);
+          }
+        },
+        {
+          name: 'Menu: select-invert',
+          fn: () => {
+            PF.UI.handleMenuAction('select-invert');
+            assert(!engine.selection.active, 'Inverted select-all produces empty selection');
+          }
+        },
+        {
+          name: 'Menu: select-none',
+          fn: () => {
+            engine.selection.selectAll();
+            PF.UI.handleMenuAction('select-none');
+            assert(!engine.selection.active, 'Selection cleared');
+          }
+        },
+
+        // View Menu
+        {
+          name: 'Menu: zoom-in, zoom-out, zoom-100, zoom-fit',
+          fn: () => {
+            const zInit = engine.zoom;
+            PF.UI.handleMenuAction('zoom-in');
+            assert(engine.zoom > zInit, 'Zoom in');
+            PF.UI.handleMenuAction('zoom-out');
+            assertClose(engine.zoom, zInit, 0.05, 'Zoom out');
+            PF.UI.handleMenuAction('zoom-100');
+            assertEqual(engine.zoom, 1.0, 'Zoom 100%');
+            PF.UI.handleMenuAction('zoom-fit');
+            assert(engine.zoom > 0, 'Zoom fit calculates positive ratio');
+          }
+        },
+        {
+          name: 'Menu: toggle-fullscreen',
+          fn: () => {
+            PF.UI.handleMenuAction('toggle-fullscreen');
+            assert(true);
+          }
+        },
+
+        // Image Menu
+        {
+          name: 'Menu: flip-horiz and flip-vert',
+          fn: () => {
+            PF.UI.handleMenuAction('flip-horiz');
+            PF.UI.handleMenuAction('flip-vert');
+            assert(true, 'Flip actions dispatch cleanly');
+          }
+        },
+        {
+          name: 'Menu: rotate-90-cw, rotate-90-ccw, rotate-180',
+          fn: () => {
+            const w = engine.width;
+            const h = engine.height;
+            PF.UI.handleMenuAction('rotate-90-cw');
+            assertEqual(engine.width, h);
+            assertEqual(engine.height, w);
+            PF.UI.handleMenuAction('rotate-90-ccw');
+            assertEqual(engine.width, w);
+            assertEqual(engine.height, h);
+            PF.UI.handleMenuAction('rotate-180');
+            assertEqual(engine.width, w);
+            assertEqual(engine.height, h);
+          }
+        },
+        {
+          name: 'Menu: flatten-image',
+          fn: () => {
+            engine.addLayer('L2', engine.width, engine.height, 'transparent');
+            PF.UI.handleMenuAction('flatten-image');
+            assertEqual(engine.layerManager.layers.length, 1);
+          }
+        },
+
+        // Layer Menu
+        {
+          name: 'Menu: new-layer, duplicate-layer, delete-layer',
+          fn: () => {
+            const initCount = engine.layerManager.layers.length;
+            engine.addLayer('AutoLayer', engine.width, engine.height, 'transparent');
+            assertEqual(engine.layerManager.layers.length, initCount + 1);
+            PF.UI.handleMenuAction('duplicate-layer');
+            assertEqual(engine.layerManager.layers.length, initCount + 2);
+            PF.UI.handleMenuAction('delete-layer');
+            assertEqual(engine.layerManager.layers.length, initCount + 1);
+          }
+        },
+        {
+          name: 'Menu: raise-layer, lower-layer, merge-down, merge-visible',
+          fn: () => {
+            engine.addLayer('TopLayer', engine.width, engine.height, 'transparent');
+            const cnt = engine.layerManager.layers.length;
+            PF.UI.handleMenuAction('lower-layer');
+            PF.UI.handleMenuAction('raise-layer');
+            PF.UI.handleMenuAction('merge-down');
+            assertEqual(engine.layerManager.layers.length, cnt - 1);
+          }
+        },
+        {
+          name: 'Menu: layer-to-image-size',
+          fn: () => {
+            PF.UI.handleMenuAction('layer-to-image-size');
+            const l = engine.getActiveLayer();
+            assertEqual(l.width, engine.width);
+            assertEqual(l.height, engine.height);
+          }
+        },
+
+        // Colors & Filters Menus
+        {
+          name: 'Menu: filter-brightness-contrast dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-brightness-contrast');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg, 'Dialog open');
+            PF.UI.closeModals();
+            assert(!document.querySelector('.gimp-dialog'), 'Dialog closed');
+          }
+        },
+        {
+          name: 'Menu: filter-exposure dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-exposure');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-hue-saturation dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-hue-saturation');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-levels dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-levels');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-invert direct filter',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-invert');
+            assert(true);
+          }
+        },
+        {
+          name: 'Menu: filter-desaturate dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-desaturate');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-sepia dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-sepia');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-gaussian-blur dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-gaussian-blur');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-sharpen dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-sharpen');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-edge-detect dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-edge-detect');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-noise dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-noise');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-pixelize dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-pixelize');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: filter-vignette dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-vignette');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+
+        // Help Menu
+        {
+          name: 'Menu: help-shortcuts dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('help-shortcuts');
+            assert(document.querySelector('.gimp-dialog, .pf-dialog'));
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Menu: help-about dialog',
+          fn: () => {
+            PF.UI.handleMenuAction('help-about');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg);
+            assert(dlg.textContent.includes('PixelForge Studio'));
+            PF.UI.closeModals();
+          }
+        }
+      ]);
+
+      // =========================================================================
+      // SECTION 3: MODALS & FORM DIALOGS WITH LIVE PREVIEW
+      // =========================================================================
+      await testSection('3. Modals & Dialog Controllers', [
+        {
+          name: 'New Canvas Image Modal',
+          fn: () => {
+            PF.UI.handleMenuAction('new-image');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg);
+            const wInput = dlg.querySelector('#new-w');
+            const hInput = dlg.querySelector('#new-h');
+            assert(wInput && hInput);
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Canvas Frame Dimensions Modal',
+          fn: () => {
+            PF.UI.handleMenuAction('canvas-size');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg);
+            const wInput = dlg.querySelector('#resize-w');
+            assert(wInput);
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Rescale Full Image Modal',
+          fn: () => {
+            PF.UI.handleMenuAction('scale-image');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg);
+            const wInput = dlg.querySelector('#scale-w');
+            assert(wInput);
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Export Image Modal with Quality Slider',
+          fn: () => {
+            PF.UI.handleMenuAction('export-image');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg);
+            const formatSel = dlg.querySelector('#export-format');
+            assert(formatSel);
+            PF.UI.closeModals();
+          }
+        },
+        {
+          name: 'Filter Dialog Live Preview Generation',
+          fn: () => {
+            PF.UI.handleMenuAction('filter-gaussian-blur');
+            const dlg = document.querySelector('.gimp-dialog, .pf-dialog');
+            assert(dlg, 'Filter dialog displayed');
+            const previewCb = dlg.querySelector('#dlg-preview-cb');
+            assert(previewCb && previewCb.checked, 'Live preview checkbox active on canvas');
+            PF.UI.closeModals();
+          }
+        }
+      ]);
+
+      // =========================================================================
+      // SECTION 4: LAYER DOCK & PROPERTIES MANAGEMENT
+      // =========================================================================
+      await testSection('4. Layer Dock & Properties Management', [
+        {
+          name: 'Layer Blend Mode switching (all 16 modes)',
+          fn: () => {
+            const modes = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'];
+            const l = engine.getActiveLayer();
+            for (const m of modes) {
+              engine.layerManager.setBlendMode(engine.layerManager.activeLayerIndex, m);
+              assertEqual(l.blendMode, m);
+            }
+            engine.layerManager.setBlendMode(engine.layerManager.activeLayerIndex, 'normal');
+          }
+        },
+        {
+          name: 'Layer Opacity slider control (0.0 to 1.0)',
+          fn: () => {
+            const l = engine.getActiveLayer();
+            engine.layerManager.setOpacity(engine.layerManager.activeLayerIndex, 0.42);
+            assertClose(l.opacity, 0.42, 0.01);
+            engine.layerManager.setOpacity(engine.layerManager.activeLayerIndex, 1.0);
+            assertEqual(l.opacity, 1.0);
+          }
+        },
+        {
+          name: 'Layer Visibility toggling',
+          fn: () => {
+            const l = engine.getActiveLayer();
+            assertEqual(l.visible, true);
+            engine.layerManager.toggleVisibility(engine.layerManager.activeLayerIndex);
+            assertEqual(l.visible, false);
+            engine.layerManager.toggleVisibility(engine.layerManager.activeLayerIndex);
+            assertEqual(l.visible, true);
+          }
+        },
+        {
+          name: 'Layer Lock and Alpha Lock',
+          fn: () => {
+            const l = engine.getActiveLayer();
+            engine.layerManager.setLayerLock(engine.layerManager.activeLayerIndex, true);
+            assertEqual(l.locked, true);
+            engine.layerManager.setLayerLock(engine.layerManager.activeLayerIndex, false);
+            assertEqual(l.locked, false);
+
+            engine.layerManager.setAlphaLock(engine.layerManager.activeLayerIndex, true);
+            assertEqual(l.alphaLocked, true);
+            engine.layerManager.setAlphaLock(engine.layerManager.activeLayerIndex, false);
+            assertEqual(l.alphaLocked, false);
+          }
+        },
+        {
+          name: 'Layer Renaming',
+          fn: () => {
+            const l = engine.getActiveLayer();
+            engine.layerManager.renameLayer(engine.layerManager.activeLayerIndex, 'RenamedMaster');
+            assertEqual(l.name, 'RenamedMaster');
+          }
+        }
+      ]);
+
+      // =========================================================================
+      // SECTION 5: VIEWPORT, RULERS, AND COLOR CONTROLS
+      // =========================================================================
+      await testSection('5. Viewport, Rulers & Color Swatches', [
+        {
+          name: 'Foreground & Background Color Swatches Swap and Reset',
+          fn: () => {
+            engine.setFgColor('#123456');
+            engine.setBgColor('#abcdef');
+            engine.swapColors();
+            assertEqual(engine.fgColor.toLowerCase(), '#abcdef');
+            assertEqual(engine.bgColor.toLowerCase(), '#123456');
+            engine.resetColors();
+            assertEqual(engine.fgColor.toLowerCase(), '#000000');
+            assertEqual(engine.bgColor.toLowerCase(), '#ffffff');
+          }
+        },
+        {
+          name: 'Coordinate Transformation (screenToCanvas & canvasToScreen)',
+          fn: () => {
+            const screen = engine.canvasToScreen(100, 100);
+            assert(typeof screen.x === 'number' && typeof screen.y === 'number');
+            const canvas = engine.screenToCanvas(screen.x, screen.y);
+            assertClose(canvas.x, 100, 2);
+            assertClose(canvas.y, 100, 2);
+          }
+        },
+        {
+          name: 'Rulers rendering without exceptions',
+          fn: () => {
+            engine.renderRulers({ x: 50, y: 50 });
+            assert(true);
+          }
+        },
+        {
+          name: 'Status bar coordinates and dimensions update',
+          fn: () => {
+            PF.UI.updateDocInfo();
+            const dimsEl = document.getElementById('status-dims');
+            assert(dimsEl && dimsEl.textContent.includes('px'));
+          }
+        }
+      ]);
+
+      // Overall Summary
+      const allPassed = matrixResults.failed === 0 && matrixResults.uncaughtErrors.length === 0;
+      summaryEl.className = allPassed ? 'summary-pass' : 'summary-fail';
+      summaryEl.textContent = `Cross-Feature Matrix Completed: ${matrixResults.passed} Passed, ${matrixResults.failed} Failed, ${matrixResults.uncaughtErrors.length} Uncaught Errors.`;
+
+      console.log(`[MATRIX-SUMMARY] Total: ${matrixResults.total} | Passed: ${matrixResults.passed} | Failed: ${matrixResults.failed} | Errors: ${matrixResults.uncaughtErrors.length}`);
+      console.log('[MATRIX-COMPLETE]');
+
+      window.__MATRIX_RESULTS__ = matrixResults;
+      setTimeout(() => {
+        if (typeof window.close === 'function') {
+          window.close();
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

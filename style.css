@@ -1,0 +1,1122 @@
+/* ==========================================================================
+   PixelForge Studio - Desktop Theme Stylesheet
+   Authentic Professional Dark Theme & Desktop UI Layout
+   ========================================================================== */
+
+:root {
+  --pf-bg-darkest: #181818;
+  --pf-bg-dark: #222222;
+  --pf-bg-panel: #2b2b2b;
+  --pf-bg-header: #333333;
+  --pf-bg-elevated: #3c3c3c;
+  --pf-bg-input: #1b1b1b;
+  --pf-bg-hover: #444444;
+  --pf-bg-active: #23467c;
+  --pf-border: #3f3f3f;
+  --pf-border-light: #525252;
+  --pf-border-dark: #141414;
+  --pf-accent: #4a82d0;
+  --pf-accent-hover: #5d95e6;
+  --pf-text: #e0e0e0;
+  --pf-text-dim: #999999;
+  --pf-text-disabled: #5e5e5e;
+  --pf-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pf-font-mono: "Consolas", "Courier New", monospace;
+  --ruler-size: 18px;
+  --statusbar-height: 24px;
+  --menubar-height: 28px;
+
+  /* Aliases for compatibility */
+  --gimp-bg-darkest: var(--pf-bg-darkest);
+  --gimp-bg-dark: var(--pf-bg-dark);
+  --gimp-bg-panel: var(--pf-bg-panel);
+  --gimp-bg-header: var(--pf-bg-header);
+  --gimp-bg-elevated: var(--pf-bg-elevated);
+  --gimp-bg-input: var(--pf-bg-input);
+  --gimp-bg-hover: var(--pf-bg-hover);
+  --gimp-bg-active: var(--pf-bg-active);
+  --gimp-border: var(--pf-border);
+  --gimp-border-light: var(--pf-border-light);
+  --gimp-border-dark: var(--pf-border-dark);
+  --gimp-accent: var(--pf-accent);
+  --gimp-accent-hover: var(--pf-accent-hover);
+  --gimp-text: var(--pf-text);
+  --gimp-text-dim: var(--pf-text-dim);
+  --gimp-text-disabled: var(--pf-text-disabled);
+  --gimp-font: var(--pf-font);
+  --gimp-font-mono: var(--pf-font-mono);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--pf-bg-darkest);
+  color: var(--pf-text);
+  font-family: var(--pf-font);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Base button and input styling */
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--pf-text);
+}
+
+button {
+  background: linear-gradient(180deg, #3c3c3c 0%, #2e2e2e 100%);
+  border: 1px solid var(--pf-border-dark);
+  border-top-color: var(--pf-border-light);
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  outline: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+button:hover {
+  background: linear-gradient(180deg, #464646 0%, #363636 100%);
+  border-color: #555555;
+}
+
+button:active, button.active {
+  background: #1e1e1e;
+  border-color: #111111;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(80%);
+}
+
+input[type="text"], input[type="number"], select, textarea {
+  background-color: var(--pf-bg-input);
+  border: 1px solid var(--pf-border);
+  border-radius: 2px;
+  padding: 2px 6px;
+  outline: none;
+  color: var(--pf-text);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
+  border-color: var(--pf-accent);
+  box-shadow: 0 0 0 1px var(--pf-accent);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  background: var(--pf-bg-input);
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid var(--pf-border);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #bbbbbb;
+  border: 1px solid #555555;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  transition: background 0.1s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #ffffff;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--pf-accent);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Main Application Layout
+   ========================================================================== */
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Menu Bar
+   ========================================================================== */
+
+#menu-bar {
+  height: var(--menubar-height);
+  background: linear-gradient(180deg, #383838 0%, #2e2e2e 100%);
+  border-bottom: 1px solid var(--pf-border-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  z-index: 1000;
+  position: relative;
+}
+
+.menu-app-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 4px;
+  font-weight: 700;
+  color: #fff;
+  font-size: 12px;
+  border-right: 1px solid var(--pf-border);
+  margin-right: 4px;
+}
+
+.menu-app-brand svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.menu-item {
+  position: relative;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 2px;
+  color: #ddd;
+  font-size: 11.5px;
+}
+
+.menu-item:hover, .menu-item.open {
+  background-color: var(--pf-bg-active);
+  color: #fff;
+}
+
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 250px;
+  background-color: #2b2b2b;
+  border: 1px solid #484848;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  border-radius: 3px;
+  padding: 4px 0;
+  z-index: 1001;
+}
+
+.menu-item.open .menu-dropdown {
+  display: block;
+}
+
+.menu-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 14px 4px 18px;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: #eee;
+  gap: 16px;
+}
+
+.menu-action:hover {
+  background-color: var(--pf-bg-active);
+  color: #fff;
+}
+
+.menu-action.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.menu-action .shortcut {
+  color: var(--pf-text-dim);
+  font-size: 10.5px;
+  font-family: var(--pf-font);
+}
+
+.menu-separator {
+  height: 1px;
+  background-color: #3e3e3e;
+  border-bottom: 1px solid #202020;
+  margin: 3px 0;
+}
+
+/* ==========================================================================
+   Main Workspace Workspace Split (Left Dock | Center Workspace | Right Dock)
+   ========================================================================== */
+
+#main-workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Left Dock (Toolbox + Tool Options) */
+#left-dock {
+  width: 260px;
+  min-width: 220px;
+  max-width: 380px;
+  background-color: var(--pf-bg-panel);
+  border-right: 1px solid var(--pf-border-dark);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Right Dock (Layers, Channels, History) */
+#right-dock {
+  width: 280px;
+  min-width: 240px;
+  max-width: 400px;
+  background-color: var(--pf-bg-panel);
+  border-left: 1px solid var(--pf-border-dark);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Toolbox Section
+   ========================================================================== */
+
+.toolbox-container {
+  padding: 6px;
+  border-bottom: 1px solid var(--pf-border);
+  background-color: var(--pf-bg-panel);
+}
+
+.toolbox-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+}
+
+.tool-btn {
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  background: linear-gradient(180deg, #3a3a3a 0%, #2f2f2f 100%);
+  border: 1px solid #202020;
+  border-top-color: #484848;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ccc;
+  transition: all 0.1s ease;
+}
+
+.tool-btn:hover {
+  background: linear-gradient(180deg, #484848 0%, #393939 100%);
+  color: #fff;
+  border-color: #555;
+}
+
+.tool-btn.active {
+  background: #1c1c1c !important;
+  border: 1px solid #111 !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 0 2px var(--pf-accent);
+  color: var(--pf-accent);
+}
+
+.tool-btn svg {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
+/* Color Swatches (FG / BG) */
+.color-swatches-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background-color: #222222;
+  border: 1px solid #1c1c1c;
+  border-radius: 3px;
+}
+
+.swatch-group {
+  position: relative;
+  width: 52px;
+  height: 34px;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #000;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  cursor: pointer;
+  border-radius: 2px;
+  position: absolute;
+}
+
+.color-swatch-fg {
+  top: 0;
+  left: 0;
+  z-index: 2;
+  background-color: #000000;
+}
+
+.color-swatch-bg {
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+  background-color: #ffffff;
+}
+
+.color-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.color-ctrl-btn {
+  width: 20px;
+  height: 16px;
+  padding: 0;
+  font-size: 10px;
+  background: #333;
+  border: 1px solid #222;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.color-ctrl-btn:hover {
+  background: #444;
+}
+
+/* ==========================================================================
+   Tool Options Panel
+   ========================================================================== */
+
+.dock-header {
+  height: 24px;
+  background: linear-gradient(180deg, #363636 0%, #2b2b2b 100%);
+  border-bottom: 1px solid var(--pf-border);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ccc;
+  letter-spacing: 0.3px;
+}
+
+.dock-header .dock-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Tool Option Form Controls */
+.opt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #252525;
+  padding: 6px 8px;
+  border-radius: 3px;
+  border: 1px solid #333;
+}
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.opt-label {
+  font-size: 11px;
+  color: #bbb;
+  white-space: nowrap;
+}
+
+.opt-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.opt-slider-row input[type="range"] {
+  flex: 1;
+}
+
+.opt-slider-row .num-input {
+  width: 46px;
+  text-align: right;
+  font-size: 10.5px;
+}
+
+/* ==========================================================================
+   Center Viewport & Canvas Area
+   ========================================================================== */
+
+#center-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--pf-bg-darkest);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Top Document Tab / Info Header */
+.doc-header-bar {
+  height: 24px;
+  background-color: #242424;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  color: #aaa;
+  gap: 12px;
+}
+
+.doc-tab {
+  background-color: #2f2f2f;
+  padding: 3px 12px;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  border: 1px solid #3d3d3d;
+  border-bottom: none;
+  color: #fff;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-info {
+  font-size: 10.5px;
+  color: #888;
+}
+
+/* Ruler and Canvas Container Layout */
+.canvas-view-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--ruler-size) 1fr;
+  grid-template-rows: var(--ruler-size) 1fr;
+  overflow: hidden;
+  position: relative;
+}
+
+.ruler-corner {
+  background-color: #2a2a2a;
+  border-right: 1px solid #1a1a1a;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #666;
+}
+
+.ruler-top {
+  position: relative;
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #1a1a1a;
+  overflow: hidden;
+}
+
+.ruler-top canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ruler-left {
+  position: relative;
+  background-color: #2a2a2a;
+  border-right: 1px solid #1a1a1a;
+  overflow: hidden;
+}
+
+.ruler-left canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The Canvas Scroll / Pan Viewport */
+#canvas-scroll-container {
+  position: relative;
+  overflow: auto;
+  width: 100%;
+  height: 100%;
+  background-color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+}
+
+#canvas-scroll-container.pan-mode {
+  cursor: grab;
+}
+
+#canvas-scroll-container.panning {
+  cursor: grabbing;
+}
+
+/* The Document Canvas Wrapper */
+#canvas-wrapper {
+  position: relative;
+  background-image: 
+    linear-gradient(45deg, #2b2b2b 25%, transparent 25%),
+    linear-gradient(-45deg, #2b2b2b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2b2b2b 75%),
+    linear-gradient(-45deg, transparent 75%, #2b2b2b 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #383838;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 0 1px #444;
+  transform-origin: center center;
+  margin: auto;
+}
+
+#main-canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#overlay-canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+/* ==========================================================================
+   Status Bar
+   ========================================================================== */
+
+#status-bar {
+  height: var(--statusbar-height);
+  background: linear-gradient(180deg, #2e2e2e 0%, #242424 100%);
+  border-top: 1px solid #1c1c1c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 11px;
+  color: #aaa;
+  z-index: 10;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-item svg {
+  width: 12px;
+  height: 12px;
+  fill: #888;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zoom-select {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  color: #ddd;
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   Right Dock (Layers, Channels, History)
+   ========================================================================== */
+
+.dock-tabs {
+  display: flex;
+  background-color: #242424;
+  border-bottom: 1px solid var(--pf-border);
+  padding: 2px 4px 0;
+  gap: 2px;
+}
+
+.dock-tab {
+  padding: 4px 10px;
+  cursor: pointer;
+  background: #2a2a2a;
+  border: 1px solid #383838;
+  border-bottom: none;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  font-size: 11px;
+  color: #999;
+}
+
+.dock-tab.active {
+  background: var(--pf-bg-panel);
+  color: #fff;
+  font-weight: 500;
+  border-top: 2px solid var(--pf-accent);
+}
+
+.tab-pane {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-pane.active {
+  display: flex;
+}
+
+/* Layers Dock Controls */
+.layers-header-controls {
+  padding: 6px 8px;
+  background-color: #272727;
+  border-bottom: 1px solid var(--pf-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.layer-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layer-mode-row select {
+  flex: 1;
+}
+
+.layer-opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layer-opacity-row input[type="range"] {
+  flex: 1;
+}
+
+/* Layer List */
+.layer-list {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #202020;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  background-color: #2b2b2b;
+  border: 1px solid #383838;
+  border-radius: 2px;
+  cursor: pointer;
+  gap: 8px;
+  transition: background 0.1s;
+}
+
+.layer-item:hover {
+  background-color: #353535;
+}
+
+.layer-item.active {
+  background-color: #1f3d6c;
+  border-color: #3a6eb5;
+  color: #fff;
+}
+
+.layer-vis-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+}
+
+.layer-vis-btn:hover {
+  color: #fff;
+  background: none;
+}
+
+.layer-thumb {
+  width: 32px;
+  height: 24px;
+  background-color: #181818;
+  border: 1px solid #444;
+  border-radius: 2px;
+  object-fit: contain;
+  background-image: 
+    linear-gradient(45deg, #333 25%, transparent 25%),
+    linear-gradient(-45deg, #333 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #333 75%),
+    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-size: 8px 8px;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-name-input {
+  flex: 1;
+  font-size: 11px;
+  padding: 1px 4px;
+  background: #111;
+  border: 1px solid var(--pf-accent);
+  color: #fff;
+}
+
+/* Layer Actions Footer */
+.layer-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 4px;
+  background: linear-gradient(180deg, #323232 0%, #292929 100%);
+  border-top: 1px solid var(--pf-border);
+}
+
+.layer-action-btn {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+}
+
+/* History / Undo Stack List */
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #202020;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 2px;
+  gap: 8px;
+  color: #aaa;
+}
+
+.history-item:hover {
+  background-color: #2d2d2d;
+  color: #eee;
+}
+
+.history-item.active {
+  background-color: #244677;
+  color: #fff;
+  font-weight: 500;
+}
+
+.history-item.undone {
+  opacity: 0.45;
+  font-style: italic;
+}
+
+/* ==========================================================================
+   Modals & Dialogs (PixelForge Desktop Window Style)
+   ========================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.gimp-dialog, .pf-dialog {
+  background-color: #2d2d2d;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255,255,255,0.1);
+  min-width: 380px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: dialogPop 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@keyframes dialogPop {
+  0% { transform: scale(0.96); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.dialog-header {
+  height: 28px;
+  background: linear-gradient(180deg, #3e3e3e 0%, #303030 100%);
+  border-bottom: 1px solid #1a1a1a;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+}
+
+.dialog-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #eee;
+}
+
+.dialog-close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.dialog-close-btn:hover {
+  color: #fff;
+  background: #c23b22;
+  border-radius: 2px;
+}
+
+.dialog-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-footer {
+  height: 40px;
+  background-color: #242424;
+  border-top: 1px solid #1c1c1c;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-footer .footer-left {
+  margin-right: auto;
+}
+
+/* Modal Form Controls */
+.dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-row label {
+  font-size: 11.5px;
+  color: #bbb;
+}
+
+.dialog-row .control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.dialog-row input[type="range"] {
+  width: 140px;
+}
+
+.dialog-row input[type="number"], .dialog-row input[type="text"] {
+  width: 70px;
+}
+
+/* Live Preview Box */
+.dialog-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  padding: 8px;
+  margin-top: 4px;
+  min-height: 120px;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.dialog-preview-canvas {
+  max-width: 100%;
+  max-height: 180px;
+  border: 1px solid #555;
+  background-image: 
+    linear-gradient(45deg, #2b2b2b 25%, transparent 25%),
+    linear-gradient(-45deg, #2b2b2b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2b2b2b 75%),
+    linear-gradient(-45deg, transparent 75%, #2b2b2b 75%);
+  background-size: 12px 12px;
+}
+
+/* Shortcuts Dialog Table */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.shortcuts-table th, .shortcuts-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #3a3a3a;
+  text-align: left;
+}
+
+.shortcuts-table th {
+  background-color: #202020;
+  color: #aaa;
+  font-weight: 600;
+}
+
+.shortcuts-table tr:hover {
+  background-color: #333333;
+}
+
+.key-badge {
+  display: inline-block;
+  background: #1c1c1c;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--pf-font-mono);
+  font-size: 10px;
+  color: #eee;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.5);
+}
+
+/* Toast Notifications */
+#toast-container {
+  position: fixed;
+  bottom: 32px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 3000;
+  pointer-events: none;
+}
+
+.toast {
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #555;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toastFadeIn 0.2s ease-out;
+}
+
+@keyframes toastFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

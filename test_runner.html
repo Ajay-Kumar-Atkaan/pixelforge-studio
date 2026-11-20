@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PixelForge Studio Automated Verification Suite</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #1e1e1e;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 { color: #5b9dd9; margin-bottom: 5px; }
+    #summary {
+      font-size: 16px;
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+      font-weight: bold;
+    }
+    .summary-running { background: #333; color: #ffeb3b; }
+    .summary-pass { background: #1b5e20; color: #a5d6a7; }
+    .summary-fail { background: #b71c1c; color: #ffcdd2; }
+    .suite-card {
+      background: #252525;
+      border: 1px solid #3c3c3c;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      padding: 12px;
+    }
+    .suite-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #90caf9;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 4px;
+    }
+    .test-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 2px;
+    }
+    .test-item:nth-child(even) { background: #2a2a2a; }
+    .test-pass { color: #81c784; }
+    .test-fail { color: #e57373; font-weight: bold; }
+    .test-error-msg {
+      color: #ff8a80;
+      font-size: 11px;
+      margin-left: 20px;
+      margin-top: 2px;
+      white-space: pre-wrap;
+    }
+    #hidden-sandbox {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+      width: 800px;
+      height: 600px;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <h1>PixelForge Studio Verification Test Suite</h1>
+  <div id="summary" class="summary-running">Initializing test environment...</div>
+  <div id="results-container"></div>
+  <div id="hidden-sandbox"></div>
+
+  <!-- Load Modules -->
+  <script src="src/layers.js"></script>
+  <script src="src/filters.js"></script>
+  <script src="src/tools.js"></script>
+  <script src="src/engine.js"></script>
+  <script src="src/ui.js"></script>
+
+  <script>
+    (async function () {
+      'use strict';
+
+      const results = {
+        passed: 0,
+        failed: 0,
+        total: 0,
+        suites: [],
+        errors: []
+      };
+
+      // Capture uncaught errors
+      window.addEventListener('error', (e) => {
+        results.errors.push({ type: 'uncaught', message: e.message, filename: e.filename, lineno: e.lineno });
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        results.errors.push({ type: 'unhandledRejection', reason: String(e.reason) });
+      });
+
+      const container = document.getElementById('results-container');
+      const summary = document.getElementById('summary');
+
+      async function runSuite(suiteName, tests) {
+        const suite = { name: suiteName, passed: 0, failed: 0, tests: [] };
+        const card = document.createElement('div');
+        card.className = 'suite-card';
+        card.innerHTML = `<div class="suite-title">${suiteName}</div><div class="suite-list"></div>`;
+        const list = card.querySelector('.suite-list');
+        container.appendChild(card);
+
+        for (const t of tests) {
+          results.total++;
+          const tItem = document.createElement('div');
+          tItem.className = 'test-item';
+          let testSuccess = false;
+          let errMsg = '';
+
+          try {
+            await t.fn();
+            testSuccess = true;
+            suite.passed++;
+            results.passed++;
+            tItem.innerHTML = `<span>${t.name}</span><span class="test-pass">✓ PASS</span>`;
+            console.log('[TEST-PASS] ' + t.name);
+          } catch (err) {
+            testSuccess = false;
+            suite.failed++;
+            results.failed++;
+            errMsg = err.stack || err.message || String(err);
+            tItem.innerHTML = `<span>${t.name}</span><span class="test-fail">✗ FAIL</span>`;
+            const errDiv = document.createElement('div');
+            errDiv.className = 'test-error-msg';
+            errDiv.textContent = errMsg;
+            tItem.appendChild(errDiv);
+            console.log('[TEST-FAIL] ' + t.name + ' : ' + errMsg);
+          }
+          list.appendChild(tItem);
+          suite.tests.push({ name: t.name, passed: testSuccess, error: errMsg });
+        }
+        results.suites.push(suite);
+      }
+
+      function assert(condition, message) {
+        if (!condition) {
+          throw new Error(message || 'Assertion failed');
+        }
+      }
+
+      function assertEqual(actual, expected, message) {
+        if (actual !== expected) {
+          throw new Error(`${message ? message + ': ' : ''}Expected [${expected}] but got [${actual}]`);
+        }
+      }
+
+      function assertClose(actual, expected, tolerance = 1, message) {
+        if (Math.abs(actual - expected) > tolerance) {
+          throw new Error(`${message ? message + ': ' : ''}Expected approx [${expected}] ±${tolerance} but got [${actual}]`);
+        }
+      }
+
+      // =========================================================================
+      // Test Suites
+      // =========================================================================
+
+      // Suite 1: Namespace & Class Integrity
+      await runSuite('1. Namespace & Class Registration', [
+        {
+          name: 'PixelForge & GIMP namespaces are globally defined',
+          fn: () => {
+            assert(window.PixelForge, 'window.PixelForge should exist');
+            assert(window.GIMP, 'window.GIMP should exist as alias');
+          }
+        },
+        {
+          name: 'All required classes and singletons are exported',
+          fn: () => {
+            const PF = window.PixelForge || window.GIMP;
+            assert(PF.Layer, 'PixelForge.Layer missing');
+            assert(PF.LayerManager, 'PixelForge.LayerManager missing');
+            assert(PF.Filters, 'PixelForge.Filters missing');
+            assert(PF.SelectionModel, 'PixelForge.SelectionModel missing');
+            assert(PF.HistoryStack, 'PixelForge.HistoryStack missing');
+            assert(PF.Engine, 'PixelForge.Engine missing');
+            assert(PF.BaseTool, 'PixelForge.BaseTool missing');
+            assert(PF.ToolRegistry, 'PixelForge.ToolRegistry missing');
+            assert(PF.UI, 'PixelForge.UI missing');
+          }
+        },
+        {
+          name: 'ToolRegistry registers all 13 tools with new descriptive names',
+          fn: () => {
+            const PF = window.PixelForge || window.GIMP;
+            const expectedTools = {
+              'brush': 'Smooth Blend Painter',
+              'pencil': 'Precision Pixel Writer',
+              'eraser': 'Alpha Clearing Tool',
+              'bucket': 'Contiguous Area Flood',
+              'picker': 'Pixel Color Sampler',
+              'rect-select': 'Box Area Selector',
+              'ellipse-select': 'Oval Area Selector',
+              'lasso': 'Freeform Outline Selector',
+              'move': 'Layer Position Shifter',
+              'crop': 'Canvas Frame Trimmer',
+              'text': 'Typography Rasterizer',
+              'zoom': 'Canvas Magnifier',
+              'pan': 'Viewport Canvas Scroller'
+            };
+            for (const [id, expectedName] of Object.entries(expectedTools)) {
+              const tool = PF.ToolRegistry[id];
+              assert(tool, `ToolRegistry.${id} missing`);
+              assertEqual(tool.name, expectedName, `Descriptive tool name for ${id}`);
+            }
+          }
+        }
+      ]);
+
+      // Suite 2: Layer & LayerManager Subsystem
+      await runSuite('2. Layer & LayerManager Architecture', [
+        {
+          name: 'Layer initialization with custom dimensions and background fill',
+          fn: () => {
+            const layer = new window.GIMP.Layer({ name: 'TestLayer', width: 200, height: 150, fill: '#ff0000' });
+            assertEqual(layer.width, 200, 'Width mismatch');
+            assertEqual(layer.height, 150, 'Height mismatch');
+            assertEqual(layer.name, 'TestLayer', 'Name mismatch');
+            const pixel = layer.ctx.getImageData(10, 10, 1, 1).data;
+            assertEqual(pixel[0], 255, 'Red channel');
+            assertEqual(pixel[1], 0, 'Green channel');
+            assertEqual(pixel[2], 0, 'Blue channel');
+            assertEqual(pixel[3], 255, 'Alpha channel');
+          }
+        },
+        {
+          name: 'Layer cloning produces independent pixel canvas',
+          fn: () => {
+            const layer = new window.GIMP.Layer({ name: 'Orig', width: 50, height: 50, fill: '#00ff00' });
+            const copy = layer.clone();
+            assertEqual(copy.name, 'Orig (Copy)');
+            // Mutate copy
+            copy.fill('#0000ff');
+            const origPix = layer.ctx.getImageData(5, 5, 1, 1).data;
+            const copyPix = copy.ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(origPix[1], 255, 'Orig should remain green');
+            assertEqual(copyPix[2], 255, 'Copy should be blue');
+          }
+        },
+        {
+          name: 'LayerManager stack operations: add, duplicate, reorder, delete',
+          fn: () => {
+            const lm = new window.GIMP.LayerManager(100, 100);
+            assertEqual(lm.layers.length, 1, 'Initial layer count');
+            const l2 = lm.addLayer('Layer 2', 100, 100, 'transparent');
+            assertEqual(lm.layers.length, 2, 'Layer count after add');
+            assertEqual(lm.activeLayerIndex, 1, 'Active layer should be index 1');
+
+            const l3 = lm.duplicateLayer();
+            assertEqual(lm.layers.length, 3, 'Layer count after duplicate');
+            assertEqual(lm.getActiveLayer().name, 'Layer 2 Copy');
+
+            // Move bottom
+            lm.layerToBottom(2);
+            assertEqual(lm.layers[0].name, 'Layer 2 Copy');
+
+            // Delete
+            lm.deleteLayer(0);
+            assertEqual(lm.layers.length, 2);
+          }
+        },
+        {
+          name: 'LayerManager mergeDown composites upper layer with blend mode and opacity',
+          fn: () => {
+            const lm = new window.GIMP.LayerManager(50, 50);
+            const lower = lm.layers[0];
+            lower.fill('#ffffff'); // white
+
+            const upper = lm.addLayer('Upper', 50, 50, 'transparent');
+            upper.fill('#ff0000'); // red
+            upper.blendMode = 'multiply';
+            upper.opacity = 0.5;
+
+            const res = lm.mergeDown(1);
+            assert(res, 'mergeDown should succeed');
+            assertEqual(lm.layers.length, 1, 'Should have 1 layer left');
+            const pixel = lm.layers[0].ctx.getImageData(10, 10, 1, 1).data;
+            // 50% opacity red over white in multiply: Red ~255, Green ~127, Blue ~127
+            assertEqual(pixel[0], 255, 'Red channel');
+            assertClose(pixel[1], 127, 4, 'Green channel');
+            assertClose(pixel[2], 127, 4, 'Blue channel');
+          }
+        },
+        {
+          name: 'LayerManager flattenImage reduces stack to single opaque canvas',
+          fn: () => {
+            const lm = new window.GIMP.LayerManager(40, 40);
+            lm.addLayer('Layer 2', 40, 40, 'transparent');
+            lm.addLayer('Layer 3', 40, 40, 'transparent');
+            assertEqual(lm.layers.length, 3);
+            lm.flattenImage('#ffffff');
+            assertEqual(lm.layers.length, 1);
+            assertEqual(lm.layers[0].name, 'Background');
+          }
+        },
+        {
+          name: 'LayerManager serialization and deserialization roundtrip',
+          fn: async () => {
+            const lm = new window.GIMP.LayerManager(60, 40);
+            lm.addLayer('Custom', 60, 40, '#123456');
+            const serialized = lm.serialize();
+            assert(serialized.layers && serialized.layers.length === 2, 'Serialized format check');
+
+            const lm2 = new window.GIMP.LayerManager(60, 40);
+            await lm2.deserialize(serialized);
+            assertEqual(lm2.layers.length, 2, 'Deserialized layers count');
+            assertEqual(lm2.layers[1].name, 'Custom', 'Deserialized layer name');
+            const pix = lm2.layers[1].ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(pix[0], 0x12, 'Hex R check');
+            assertEqual(pix[1], 0x34, 'Hex G check');
+            assertEqual(pix[2], 0x56, 'Hex B check');
+          }
+        }
+      ]);
+
+      // Suite 3: Color Adjustments & Pixel Filters
+      await runSuite('3. Color Adjustments & Pixel Filters Engine', [
+        {
+          name: 'Brightness & Contrast LUT algorithm',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 10; cvs.height = 10;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = 'rgb(100, 100, 100)';
+            ctx.fillRect(0, 0, 10, 10);
+            const imgData = ctx.getImageData(0, 0, 10, 10);
+
+            // Test Brightness +20
+            window.GIMP.Filters.brightnessContrast(imgData, { brightness: 20, contrast: 0 });
+            assertClose(imgData.data[0], 151, 3, 'Brightened pixel value');
+
+            // Test Contrast +30 on midtone
+            ctx.fillRect(0, 0, 10, 10);
+            const imgData2 = ctx.getImageData(0, 0, 10, 10);
+            window.GIMP.Filters.brightnessContrast(imgData2, { brightness: 0, contrast: 30 });
+            assert(imgData2.data[0] < 100, 'Contrast above 128 spreads away from center');
+          }
+        },
+        {
+          name: 'Invert color filter',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 2; cvs.height = 2;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = 'rgb(40, 100, 200)';
+            ctx.fillRect(0, 0, 2, 2);
+            const imgData = ctx.getImageData(0, 0, 2, 2);
+            window.GIMP.Filters.invert(imgData);
+            assertEqual(imgData.data[0], 215, 'Inverted R (255-40)');
+            assertEqual(imgData.data[1], 155, 'Inverted G (255-100)');
+            assertEqual(imgData.data[2], 55, 'Inverted B (255-200)');
+          }
+        },
+        {
+          name: 'Grayscale / Desaturate (Luminance Rec. 709)',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 2; cvs.height = 2;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = 'rgb(255, 0, 0)'; // Pure red
+            ctx.fillRect(0, 0, 2, 2);
+            const imgData = ctx.getImageData(0, 0, 2, 2);
+            window.GIMP.Filters.grayscale(imgData, { mode: 'luminance' });
+            // Rec 709: Red coeff is ~0.2126 -> ~54
+            assertEqual(imgData.data[0], imgData.data[1], 'R == G');
+            assertEqual(imgData.data[1], imgData.data[2], 'G == B');
+            assertClose(imgData.data[0], 54, 2, 'Luminance value');
+          }
+        },
+        {
+          name: 'Sepia tone matrix',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 2; cvs.height = 2;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = 'rgb(120, 120, 120)';
+            ctx.fillRect(0, 0, 2, 2);
+            const imgData = ctx.getImageData(0, 0, 2, 2);
+            window.GIMP.Filters.sepia(imgData, { intensity: 100 });
+            assert(imgData.data[0] > imgData.data[1], 'Sepia R > G');
+            assert(imgData.data[1] > imgData.data[2], 'Sepia G > B');
+          }
+        },
+        {
+          name: 'Levels adjustment with gamma LUT',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 2; cvs.height = 2;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = 'rgb(128, 128, 128)';
+            ctx.fillRect(0, 0, 2, 2);
+            const imgData = ctx.getImageData(0, 0, 2, 2);
+            window.GIMP.Filters.levels(imgData, { inBlack: 50, inWhite: 200, gamma: 1.0 });
+            assert(imgData.data[0] !== 128, 'Levels should alter midtone');
+          }
+        },
+        {
+          name: 'Separable 1D Gaussian Blur',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 9; cvs.height = 9;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, 9, 9);
+            // Single white dot in center
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(4, 4, 1, 1);
+            const imgData = ctx.getImageData(0, 0, 9, 9);
+            window.GIMP.Filters.gaussianBlur(imgData, { radius: 2 });
+            // Neighboring pixel should now have received blurred energy
+            const neighborPix = imgData.data[(4 * 9 + 5) * 4];
+            assert(neighborPix > 0, 'Neighboring pixel should have blur intensity');
+          }
+        },
+        {
+          name: 'Sobel Edge Detect',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 10; cvs.height = 10;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, 5, 10);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(5, 0, 5, 10); // Sharp vertical boundary at x=5
+            const imgData = ctx.getImageData(0, 0, 10, 10);
+            window.GIMP.Filters.edgeDetect(imgData);
+            // Edge at x=4/5 should have high response
+            const edgePix = imgData.data[(5 * 10 + 4) * 4];
+            assert(edgePix > 100, `Sobel edge should be detected: ${edgePix}`);
+          }
+        },
+        {
+          name: 'Pixelize / Mosaic filter',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 16; cvs.height = 16;
+            const ctx = cvs.getContext('2d');
+            for (let i = 0; i < 16; i++) {
+              ctx.fillStyle = `rgb(${i * 15}, ${i * 15}, ${i * 15})`;
+              ctx.fillRect(i, 0, 1, 16);
+            }
+            const imgData = ctx.getImageData(0, 0, 16, 16);
+            window.GIMP.Filters.pixelize(imgData, { pixelSize: 8 });
+            // Pixels within the same 8x8 block should have identical color
+            const p1 = imgData.data[0];
+            const p2 = imgData.data[4];
+            assertEqual(p1, p2, 'Block pixels must be uniform');
+          }
+        },
+        {
+          name: 'applyFilterToLayer with Selection Mask clipping',
+          fn: () => {
+            const layer = new window.GIMP.Layer({ width: 20, height: 20, fill: '#808080' });
+            // Create selection mask: only left half selected
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = 20; maskCanvas.height = 20;
+            const mCtx = maskCanvas.getContext('2d');
+            mCtx.fillStyle = '#ffffff';
+            mCtx.fillRect(0, 0, 10, 20); // Selected
+            const maskData = mCtx.getImageData(0, 0, 20, 20);
+
+            window.GIMP.Filters.applyFilterToLayer(layer, 'invert', {}, maskData);
+            const leftPix = layer.ctx.getImageData(5, 5, 1, 1).data;
+            const rightPix = layer.ctx.getImageData(15, 5, 1, 1).data;
+            // Left was inverted: 255 - 128 = 127
+            assertClose(leftPix[0], 127, 2, 'Left pixel inverted');
+            // Right remained untouched: 128
+            assertEqual(rightPix[0], 128, 'Right pixel untouched');
+          }
+        },
+        {
+          name: 'previewFilter generates preview canvas correctly',
+          fn: () => {
+            const cvs = document.createElement('canvas');
+            cvs.width = 100; cvs.height = 80;
+            const pCanvas = window.GIMP.Filters.previewFilter(cvs, 'invert', {}, 50);
+            assert(pCanvas instanceof HTMLCanvasElement, 'Should return canvas');
+            assertEqual(pCanvas.width, 50, 'Max dimension scaled width');
+            assertEqual(pCanvas.height, 40, 'Max dimension scaled height');
+          }
+        }
+      ]);
+
+      // Suite 4: Selection Engine & Marching Ants
+      await runSuite('4. Selection Engine & Geometry Model', [
+        {
+          name: 'Rectangular selection bounds & hit testing',
+          fn: () => {
+            const mockEngine = { width: 200, height: 200, emit: () => {} };
+            const sm = new window.GIMP.SelectionModel(mockEngine);
+            sm.setRect(20, 30, 50, 40, 'replace');
+            assert(sm.active, 'Selection should be active');
+            assertEqual(sm.bounds.x, 20);
+            assertEqual(sm.bounds.y, 30);
+            assertEqual(sm.bounds.width, 50);
+            assertEqual(sm.bounds.height, 40);
+            assert(sm.contains(25, 35), 'Point inside should return true');
+            assert(!sm.contains(10, 10), 'Point outside should return false');
+          }
+        },
+        {
+          name: 'Select All, Clear, and Invert',
+          fn: () => {
+            const mockEngine = { width: 100, height: 100, emit: () => {} };
+            const sm = new window.GIMP.SelectionModel(mockEngine);
+            sm.selectAll();
+            assert(sm.active);
+            assertEqual(sm.bounds.width, 100);
+            sm.clear();
+            assert(!sm.active, 'Should be inactive after clear');
+            assert(sm.contains(50, 50), 'sm.contains returns true when no selection exists');
+
+            // Set small rect, then invert
+            sm.setRect(10, 10, 20, 20, 'replace');
+            sm.invert();
+            assert(sm.active);
+            // Center of original rect should now be unselected
+            assert(!sm.contains(15, 15), 'Inside original rect should now be outside');
+            assert(sm.contains(80, 80), 'Outside original rect should now be inside');
+          }
+        },
+        {
+          name: 'applyClip sets clipping path on 2D context',
+          fn: () => {
+            const mockEngine = { width: 50, height: 50, emit: () => {} };
+            const sm = new window.GIMP.SelectionModel(mockEngine);
+            sm.setRect(5, 5, 20, 20);
+            const cvs = document.createElement('canvas');
+            const ctx = cvs.getContext('2d');
+            // Check that calling applyClip does not throw
+            sm.applyClip(ctx);
+            assert(true);
+          }
+        }
+      ]);
+
+      // Suite 5: Undo / Redo History Stack
+      await runSuite('5. Undo / Redo History Stack', [
+        {
+          name: 'History push, undo, redo, and state restore',
+          fn: async () => {
+            const mockContainer = document.getElementById('hidden-sandbox');
+            mockContainer.innerHTML = '<div id="canvas-wrapper"><canvas id="main-canvas"></canvas><canvas id="overlay-canvas"></canvas></div>';
+            const engine = new window.GIMP.Engine({ width: 100, height: 100 });
+            assertEqual(engine.history.snapshots.length, 1, 'Initial snapshot on start');
+
+            // Make edit
+            const layer = engine.getActiveLayer();
+            layer.fill('#ff0000');
+            await engine.history.push('Fill Red');
+            assertEqual(engine.history.snapshots.length, 2);
+
+            // Undo
+            assert(engine.history.canUndo(), 'canUndo');
+            const undoRes = await engine.history.undo();
+            assert(undoRes, 'undo succeeds');
+            assertEqual(engine.getActiveLayer().ctx.getImageData(5, 5, 1, 1).data[0], 255, 'Restored white BG R');
+            assertEqual(engine.getActiveLayer().ctx.getImageData(5, 5, 1, 1).data[1], 255, 'Restored white BG G');
+
+            // Redo
+            assert(engine.history.canRedo(), 'canRedo');
+            const redoRes = await engine.history.redo();
+            assert(redoRes, 'redo succeeds');
+            assertEqual(engine.getActiveLayer().ctx.getImageData(5, 5, 1, 1).data[1], 0, 'Restored red fill G');
+          }
+        },
+        {
+          name: 'History branch truncation on edit after undo',
+          fn: async () => {
+            const engine = new window.GIMP.Engine({ width: 50, height: 50 });
+            await engine.history.push('Action 1');
+            await engine.history.push('Action 2');
+            assertEqual(engine.history.snapshots.length, 3);
+
+            await engine.history.undo(); // Back to Action 1
+            assertEqual(engine.history.currentIndex, 1);
+
+            await engine.history.push('Action 3 (Branch)');
+            assertEqual(engine.history.snapshots.length, 3, 'Old Action 2 truncated');
+            assertEqual(engine.history.snapshots[2].description, 'Action 3 (Branch)');
+            assert(!engine.history.canRedo(), 'No redo available after new branch');
+          }
+        }
+      ]);
+
+      // Suite 6: Interactive Tools & Paint Pipeline
+      await runSuite('6. Interactive Tools & Paint Pipeline', [
+        {
+          name: 'Paintbrush Tool: stroke interpolation and opacity',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 100, height: 100 });
+            const brush = window.GIMP.ToolRegistry.brush;
+            brush.options.size = 10;
+            brush.options.hardness = 100;
+            brush.options.opacity = 100;
+            engine.setFgColor('#00ff00');
+
+            // Draw line from (20, 20) to (50, 20)
+            brush.onPointerDown({ button: 0 }, { x: 20, y: 20 }, engine);
+            brush.onPointerMove({}, { x: 35, y: 20 }, engine);
+            brush.onPointerMove({}, { x: 50, y: 20 }, engine);
+            brush.onPointerUp({}, { x: 50, y: 20 }, engine);
+
+            const midPix = engine.getActiveLayer().ctx.getImageData(35, 20, 1, 1).data;
+            assertEqual(midPix[0], 0, 'R channel');
+            assertEqual(midPix[1], 255, 'G channel');
+            assertEqual(midPix[2], 0, 'B channel');
+          }
+        },
+        {
+          name: 'Pencil Tool: hard 1px drawing',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 50, height: 50 });
+            const pencil = window.GIMP.ToolRegistry.pencil;
+            pencil.options.size = 2;
+            engine.setFgColor('#123456');
+
+            pencil.onPointerDown({ button: 0 }, { x: 10, y: 10 }, engine);
+            pencil.onPointerUp({}, { x: 10, y: 10 }, engine);
+
+            const pix = engine.getActiveLayer().ctx.getImageData(10, 10, 1, 1).data;
+            assertEqual(pix[0], 0x12);
+            assertEqual(pix[1], 0x34);
+            assertEqual(pix[2], 0x56);
+          }
+        },
+        {
+          name: 'Eraser Tool: destination-out alpha erase',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 50, height: 50 });
+            const layer = engine.getActiveLayer();
+            layer.fill('#ff0000'); // Opaque red
+            const eraser = window.GIMP.ToolRegistry.eraser;
+            eraser.options.size = 12;
+            eraser.options.opacity = 100;
+            eraser.options.hardness = 100;
+
+            eraser.onPointerDown({ button: 0 }, { x: 25, y: 25 }, engine);
+            eraser.onPointerUp({}, { x: 25, y: 25 }, engine);
+
+            const pix = layer.ctx.getImageData(25, 25, 1, 1).data;
+            assertEqual(pix[3], 0, 'Alpha channel should be 0 after erase');
+          }
+        },
+        {
+          name: 'Bucket Fill Tool: 32-bit BFS queue flood fill',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 50, height: 50 });
+            const layer = engine.getActiveLayer();
+            layer.fill('#ffffff');
+            // Draw a black box border from 10 to 30
+            layer.ctx.strokeStyle = '#000000';
+            layer.ctx.strokeRect(10, 10, 20, 20);
+
+            const bucket = window.GIMP.ToolRegistry.bucket;
+            bucket.options.tolerance = 10;
+            engine.setFgColor('#0000ff'); // Blue
+
+            // Fill inside box at (15, 15)
+            bucket.onPointerDown({ button: 0 }, { x: 15, y: 15 }, engine);
+
+            const insidePix = layer.ctx.getImageData(15, 15, 1, 1).data;
+            const outsidePix = layer.ctx.getImageData(5, 5, 1, 1).data;
+            assertEqual(insidePix[2], 255, 'Inside box filled blue');
+            assertEqual(outsidePix[0], 255, 'Outside box remains white');
+          }
+        },
+        {
+          name: 'Color Picker Tool: eye dropper pixel extraction',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 50, height: 50 });
+            engine.getActiveLayer().fill('#987654');
+            const picker = window.GIMP.ToolRegistry.picker;
+            picker.onPointerDown({ button: 0 }, { x: 20, y: 20 }, engine);
+            assertEqual(engine.fgColor.toLowerCase(), '#987654', 'Sampled fgColor');
+          }
+        },
+        {
+          name: 'Move Tool: translating layer offset',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 100, height: 100 });
+            const layer = engine.getActiveLayer();
+            assertEqual(layer.x, 0);
+            assertEqual(layer.y, 0);
+
+            const move = window.GIMP.ToolRegistry.move;
+            move.onPointerDown({ button: 0 }, { x: 10, y: 10 }, engine);
+            move.onPointerMove({}, { x: 25, y: 35 }, engine);
+            move.onPointerUp({}, { x: 25, y: 35 }, engine);
+
+            assertEqual(layer.x, 15, 'Layer x offset');
+            assertEqual(layer.y, 25, 'Layer y offset');
+          }
+        },
+        {
+          name: 'Text Tool: rasterizing typography to active layer',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 100, height: 50 });
+            const textTool = window.GIMP.ToolRegistry.text;
+            textTool.options.text = 'GIMP';
+            textTool.options.fontSize = 24;
+            engine.setFgColor('#ffffff');
+
+            textTool.onPointerDown({ button: 0 }, { x: 10, y: 10 }, engine);
+            const activeLayer = engine.getActiveLayer();
+            const imgData = activeLayer.ctx.getImageData(0, 0, 100, 50).data;
+            let hasText = false;
+            for (let i = 3; i < imgData.length; i += 4) {
+              if (imgData[i] > 100) { hasText = true; break; }
+            }
+            assert(hasText, 'Text rasterization should write pixels');
+          }
+        },
+        {
+          name: 'Zoom & Pan Viewport transforms',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 200, height: 200 });
+            engine.setZoom(2.0);
+            assertEqual(engine.zoom, 2.0);
+            engine.panBy(50, -30);
+            assertEqual(engine.panX, 50);
+            assertEqual(engine.panY, -30);
+          }
+        }
+      ]);
+
+      // Suite 7: Image & Project I/O
+      await runSuite('7. Image & Project I/O Engine', [
+        {
+          name: 'Export image as PNG Data URL',
+          fn: () => {
+            const engine = new window.GIMP.Engine({ width: 60, height: 40 });
+            engine.getActiveLayer().fill('#ff8800');
+            engine.render();
+            const dataUrl = engine.exportImage('image/png');
+            assert(dataUrl.startsWith('data:image/png;base64,'), 'PNG DataURL format');
+          }
+        },
+        {
+          name: 'Export project JSON and restore with loadProjectJSON',
+          fn: async () => {
+            const engine = new window.GIMP.Engine({ width: 80, height: 60 });
+            engine.getActiveLayer().name = 'BaseLayer';
+            engine.addLayer('OverlayLayer', 80, 60, '#00ffff');
+            const json = engine.exportProjectJSON();
+            const parsed = JSON.parse(json);
+            assert(parsed.format === 'pixelforge-project' || parsed.format === 'web-gimp-project', 'Valid project format descriptor');
+            assertEqual(parsed.layers.length, 2);
+
+            const engine2 = new window.GIMP.Engine({ width: 10, height: 10 });
+            await engine2.loadProjectJSON(json);
+            assertEqual(engine2.width, 80);
+            assertEqual(engine2.height, 60);
+            assertEqual(engine2.layerManager.layers.length, 2);
+            assertEqual(engine2.layerManager.layers[1].name, 'OverlayLayer');
+          }
+        }
+      ]);
+
+      // Suite 8: UI Desktop Integration & Menu Actions
+      await runSuite('8. UI Desktop Shell & Action Dispatch', [
+        {
+          name: 'UIController initialization with engine',
+          fn: () => {
+            const sandbox = document.getElementById('hidden-sandbox');
+            sandbox.innerHTML = `
+              <div id="app-container">
+                <header id="menu-bar"></header>
+                <div class="toolbox-grid"></div>
+                <div id="canvas-scroll-container">
+                  <div id="canvas-wrapper">
+                    <canvas id="main-canvas"></canvas>
+                    <canvas id="overlay-canvas"></canvas>
+                  </div>
+                </div>
+                <div id="layers-list-container"></div>
+                <div id="history-list-container"></div>
+                <div id="tool-options-content"></div>
+                <div class="color-swatch-fg"></div>
+                <div class="color-swatch-bg"></div>
+                <div id="status-coords"><span></span></div>
+                <div id="status-dims"><span></span></div>
+                <div id="status-message"><span></span></div>
+                <div id="modal-container"></div>
+                <div id="toast-container"></div>
+              </div>
+            `;
+            const engine = new window.GIMP.Engine({ width: 100, height: 80 });
+            window.GIMP.UI.init(engine);
+            assert(window.GIMP.UI.engine === engine, 'UI controller connected to engine');
+          }
+        },
+        {
+          name: 'Menu Action Dispatch: select-all, select-none, select-invert',
+          fn: () => {
+            const engine = window.GIMP.UI.engine;
+            window.GIMP.UI.handleMenuAction('select-all');
+            assert(engine.selection.active, 'Selection active after select-all');
+            window.GIMP.UI.handleMenuAction('select-none');
+            assert(!engine.selection.active, 'Selection cleared after select-none');
+          }
+        },
+        {
+          name: 'Menu Action Dispatch: flip-horiz, flip-vert, rotate-90-cw',
+          fn: () => {
+            const engine = window.GIMP.UI.engine;
+            window.GIMP.UI.handleMenuAction('flip-horiz');
+            window.GIMP.UI.handleMenuAction('flip-vert');
+            window.GIMP.UI.handleMenuAction('rotate-90-cw');
+            assert(true, 'Transform menu actions executed cleanly');
+          }
+        },
+        {
+          name: 'Modal Dialog generation: Filter Brightness/Contrast modal',
+          fn: () => {
+            window.GIMP.UI.handleMenuAction('filter-brightness-contrast');
+            const dialog = document.querySelector('.gimp-dialog');
+            assert(dialog, 'Modal dialog should be rendered');
+            const title = dialog.querySelector('.dialog-title');
+            assert(title && title.textContent.includes('Brightness'), 'Title rendered');
+            window.GIMP.UI.closeModals();
+            assert(!document.querySelector('.gimp-dialog'), 'Modal should be closed');
+          }
+        },
+        {
+          name: 'Toast notifications render and dismiss',
+          fn: () => {
+            window.GIMP.UI.showToast('Test Toast Notification', 'success');
+            const toasts = document.querySelectorAll('.toast');
+            assert(toasts.length > 0, 'Toast element exists in DOM');
+            const latestToast = toasts[toasts.length - 1];
+            assertEqual(latestToast.textContent, 'Test Toast Notification');
+          }
+        }
+      ]);
+
+      // Suite 9: Live DOM Canvas Pointer Event Interactions
+      await runSuite('Live DOM Canvas Pointer Event Interactions', [
+        {
+          name: 'DOM overlay-canvas and main-canvas have pointer-events auto',
+          fn: () => {
+            const overlay = document.getElementById('overlay-canvas');
+            const main = document.getElementById('main-canvas');
+            assert(overlay, 'overlay-canvas exists');
+            assert(main, 'main-canvas exists');
+            const overlayStyle = window.getComputedStyle(overlay);
+            assertEqual(overlayStyle.pointerEvents, 'auto', 'overlay-canvas must have pointer-events: auto for user interaction');
+          }
+        },
+        {
+          name: 'Live DOM mouse click with Smooth Blend Painter paints onto active layer',
+          fn: () => {
+            const ui = window.PixelForge.UI;
+            const engine = ui.engine;
+            ui.selectTool('brush');
+            engine.fgColor = '#ff0000';
+            const overlay = document.getElementById('overlay-canvas');
+            const rect = overlay.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            
+            overlay.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+            window.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+            
+            const layer = engine.getActiveLayer();
+            const coords = engine.screenToCanvas(cx, cy);
+            const pixel = layer.ctx.getImageData(coords.x, coords.y, 1, 1).data;
+            assert(pixel[0] > 0, 'Red pixel component painted at coords');
+            assert(pixel[3] > 0, 'Alpha channel non-zero');
+          }
+        },
+        {
+          name: 'Live DOM mouse click with Precision Pixel Writer marks 1px pixels',
+          fn: () => {
+            const ui = window.PixelForge.UI;
+            const engine = ui.engine;
+            ui.selectTool('pencil');
+            engine.fgColor = '#00ff00';
+            const overlay = document.getElementById('overlay-canvas');
+            const rect = overlay.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            
+            overlay.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+            window.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+            
+            const layer = engine.getActiveLayer();
+            const coords = engine.screenToCanvas(cx, cy);
+            const pixel = layer.ctx.getImageData(coords.x, coords.y, 1, 1).data;
+            assertEqual(pixel[1], 255, 'Green component 255');
+          }
+        },
+        {
+          name: 'Live DOM mouse drag with Canvas Frame Trimmer defines crop and commits',
+          fn: () => {
+            const ui = window.PixelForge.UI;
+            const engine = ui.engine;
+            ui.selectTool('crop');
+            const cropTool = ui.activeTool;
+            const overlay = document.getElementById('overlay-canvas');
+            
+            const p1 = engine.canvasToScreen(50, 50);
+            const p2 = engine.canvasToScreen(350, 250);
+            
+            overlay.dispatchEvent(new PointerEvent('pointerdown', { clientX: p1.x, clientY: p1.y, button: 0, bubbles: true }));
+            window.dispatchEvent(new PointerEvent('pointermove', { clientX: p2.x, clientY: p2.y, button: 0, bubbles: true }));
+            window.dispatchEvent(new PointerEvent('pointerup', { clientX: p2.x, clientY: p2.y, button: 0, bubbles: true }));
+            
+            assert(cropTool.cropRect, 'cropRect defined after mouse drag');
+            assertEqual(cropTool.cropRect.w, 300, 'Crop width 300');
+            assertEqual(cropTool.cropRect.h, 200, 'Crop height 200');
+            cropTool.commitCrop(engine);
+            assertEqual(engine.width, 300, 'Engine width trimmed to 300');
+            assertEqual(engine.height, 200, 'Engine height trimmed to 200');
+          }
+        }
+      ]);
+
+      // Overall Summary Evaluation
+      const allPassed = results.failed === 0 && results.errors.length === 0;
+      summary.className = allPassed ? 'summary-pass' : 'summary-fail';
+      summary.textContent = `Verification Complete: ${results.passed} Passed, ${results.failed} Failed, ${results.errors.length} Uncaught Errors.`;
+
+      // Post results back to HTTP test harness server if running
+      try {
+        await fetch('/api/test-result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(results)
+        });
+      } catch (e) {
+        console.log('HTTP test harness report not reached (standalone mode).');
+      }
+
+      window.__TEST_RESULTS__ = results;
+      console.log('__TEST_OUTPUT_START__' + JSON.stringify(results) + '__TEST_OUTPUT_END__');
+      const jsonDiv = document.createElement('div');
+      jsonDiv.id = 'results-json';
+      jsonDiv.style.display = 'none';
+      jsonDiv.textContent = JSON.stringify(results);
+      document.body.appendChild(jsonDiv);
+
+      setTimeout(() => {
+        if (typeof window.close === 'function') {
+          window.close();
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+</html>
