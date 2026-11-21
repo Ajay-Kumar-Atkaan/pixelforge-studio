@@ -550,6 +550,7 @@
 
       // Core Subsystems
       this.layerManager = new root.GIMP.LayerManager(this.width, this.height);
+      this.layerManager.engine = this;
       this.layers = this.layerManager; // Alias for UI compatibility
       this.selection = new SelectionModel(this);
       this.history = new HistoryStack(this, 35);
@@ -561,6 +562,9 @@
       });
       this.layerManager.on('activeLayerChanged', (data) => {
         this.emit('activeLayerChanged', data);
+      });
+      this.layerManager.on('layerRenamed', (data) => {
+        this.emit('layerRenamed', data);
       });
 
       // Active Tool
@@ -836,6 +840,78 @@
       this.render();
     }
 
+    renameLayer(layerIdOrIndex, newName) {
+      let targetLayer = null;
+      if (typeof layerIdOrIndex === 'number') {
+        targetLayer = this.layerManager.layers[layerIdOrIndex];
+      } else if (typeof layerIdOrIndex === 'string') {
+        targetLayer = this.layerManager.layers.find(l => l.id === layerIdOrIndex || l.name === layerIdOrIndex);
+      } else if (layerIdOrIndex && layerIdOrIndex.id) {
+        targetLayer = this.layerManager.layers.find(l => l.id === layerIdOrIndex.id);
+      } else {
+        targetLayer = this.getActiveLayer();
+      }
+
+      const oldName = targetLayer ? targetLayer.name : '';
+      const initialHistoryLen = (this.history && this.history.snapshots) ? this.history.snapshots.length : 0;
+      const res = this.layerManager.renameLayer(layerIdOrIndex, newName);
+      if (res && targetLayer && oldName !== targetLayer.name) {
+        if (this.history && this.history.snapshots && this.history.snapshots.length === initialHistoryLen) {
+          this.history.push(`Rename Layer: "${oldName}" -> "${targetLayer.name}"`);
+        }
+        this.render();
+      }
+      return res;
+    }
+
+    addTextLayer(options = {}) {
+      if (typeof options === 'string') {
+        const text = options;
+        const x = arguments[1] !== undefined ? arguments[1] : 20;
+        const y = arguments[2] !== undefined ? arguments[2] : 20;
+        const extra = arguments[3] || {};
+        options = Object.assign({}, extra, { text, x, y });
+      }
+      const text = options.text || 'Text';
+      const name = options.name || (text.length > 20 ? text.slice(0, 20) + '...' : text);
+      const layer = this.layerManager.addLayer(name, this.width, this.height, 'transparent');
+      layer.isTextLayer = true;
+      layer.textData = {
+        text: text,
+        fontFamily: options.fontFamily || 'sans-serif',
+        fontSize: parseInt(options.fontSize, 10) || 28,
+        bold: !!options.bold,
+        italic: !!options.italic,
+        color: options.color || this.fgColor || '#ffffff',
+        x: options.x !== undefined ? options.x : 20,
+        y: options.y !== undefined ? options.y : 20
+      };
+      layer.renderText();
+      this.history.push(`Add Typography Layer "${layer.name}"`);
+      this.render();
+      return layer;
+    }
+
+    updateTextLayer(layerIdOrIndex, textData = {}) {
+      let targetLayer = null;
+      if (typeof layerIdOrIndex === 'number') {
+        targetLayer = this.layerManager.layers[layerIdOrIndex];
+      } else if (typeof layerIdOrIndex === 'string') {
+        targetLayer = this.layerManager.layers.find(l => l.id === layerIdOrIndex);
+      } else if (layerIdOrIndex && layerIdOrIndex.id) {
+        targetLayer = layerIdOrIndex;
+      } else {
+        targetLayer = this.getActiveLayer();
+      }
+      if (!targetLayer) return null;
+
+      targetLayer.isTextLayer = true;
+      targetLayer.renderText(textData);
+      this.history.push(`Update Text Layer "${targetLayer.name}"`);
+      this.render();
+      return targetLayer;
+    }
+
     // ==========================================
     // Document Canvas Operations
     // ==========================================
@@ -844,7 +920,18 @@
       this.width = Math.max(1, Math.round(width));
       this.height = Math.max(1, Math.round(height));
       this.layerManager = new root.GIMP.LayerManager(this.width, this.height);
+      this.layerManager.engine = this;
       this.layers = this.layerManager;
+      this.layerManager.on('changed', () => {
+        this.render();
+        this.emit('layersChanged');
+      });
+      this.layerManager.on('activeLayerChanged', (data) => {
+        this.emit('activeLayerChanged', data);
+      });
+      this.layerManager.on('layerRenamed', (data) => {
+        this.emit('layerRenamed', data);
+      });
       this.layerManager.layers = [];
       this.layerManager.addLayer('Background', this.width, this.height, fillType);
 

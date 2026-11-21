@@ -46,6 +46,7 @@
       global.GIMP.currentEngine = engine;
       global.PixelForge.currentUI = this;
       global.GIMP.currentUI = this;
+      this.canvasViewport = document.getElementById('canvas-scroll-container') || document.body;
 
       this.initMenuBar();
       this.initToolbox();
@@ -599,16 +600,10 @@
       document.getElementById('btn-delete-layer')?.addEventListener('click', () => this.handleMenuAction('delete-layer'));
     }
 
-    updateLayersList() {
-      const container = document.getElementById('layer-list-container');
-      if (!container || !this.engine.layers) return;
-
-      container.innerHTML = '';
-
+    syncLayerDockHeader() {
+      if (!this.engine || !this.engine.layers) return;
       const layers = this.engine.layers.layers;
       const activeIdx = this.engine.layers.activeLayerIndex;
-
-      // Update mode & opacity controls to reflect currently active layer
       const activeLayer = layers[activeIdx];
       if (activeLayer) {
         const blendSelect = document.getElementById('layer-blend-select');
@@ -619,12 +614,27 @@
         if (opacitySlider) opacitySlider.value = Math.round((activeLayer.opacity ?? 1) * 100);
         if (opacityVal) opacityVal.textContent = `${Math.round((activeLayer.opacity ?? 1) * 100)}%`;
       }
+    }
+
+    updateLayersList() {
+      const container = document.getElementById('layer-list-container');
+      if (!container || !this.engine.layers) return;
+      if (this.isRenamingLayer) return;
+
+      container.innerHTML = '';
+
+      const layers = this.engine.layers.layers;
+      const activeIdx = this.engine.layers.activeLayerIndex;
+
+      // Update mode & opacity controls to reflect currently active layer
+      this.syncLayerDockHeader();
 
       // Display in reverse order (top layer first in UI list, bottom layer at bottom)
       for (let i = layers.length - 1; i >= 0; i--) {
         const layer = layers[i];
         const item = document.createElement('div');
         item.className = `layer-item ${i === activeIdx ? 'active' : ''}`;
+        item.dataset.layerIndex = i;
 
         // Visibility Toggle Eye
         const eyeBtn = document.createElement('button');
@@ -635,7 +645,8 @@
           e.stopPropagation();
           this.engine.layers.toggleVisibility(i);
           this.engine.render();
-          this.updateLayersList();
+          eyeBtn.innerHTML = layer.visible ? '👁' : '<span style="opacity:0.3;">👁</span>';
+          eyeBtn.title = layer.visible ? 'Hide Layer' : 'Show Layer';
         });
 
         // Layer Thumbnail
@@ -655,35 +666,80 @@
         nameLabel.title = 'Double click to rename';
 
         // Double click to rename
-        nameLabel.addEventListener('dblclick', (e) => {
-          e.stopPropagation();
+        const startRename = (e) => {
+          if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+          if (item.querySelector('.layer-name-input')) return;
+          this.isRenamingLayer = true;
+
+          const currentName = layer.name;
           const input = document.createElement('input');
           input.type = 'text';
           input.className = 'layer-name-input';
-          input.value = layer.name;
+          input.value = currentName;
+
           item.replaceChild(input, nameLabel);
           input.focus();
           input.select();
 
+          let committed = false;
           const commitRename = () => {
+            if (committed) return;
+            committed = true;
+            this.isRenamingLayer = false;
             const val = input.value.trim();
-            if (val) {
-              this.engine.layers.renameLayer(i, val);
+            if (val && val !== currentName) {
+              if (this.engine.renameLayer) {
+                this.engine.renameLayer(i, val);
+              } else {
+                this.engine.layers.renameLayer(i, val);
+              }
             }
             this.updateLayersList();
           };
 
+          const cancelRename = () => {
+            if (committed) return;
+            committed = true;
+            this.isRenamingLayer = false;
+            this.updateLayersList();
+          };
+
+          input.addEventListener('click', (ev) => ev.stopPropagation());
+          input.addEventListener('dblclick', (ev) => ev.stopPropagation());
+          input.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+          input.addEventListener('mousedown', (ev) => ev.stopPropagation());
+
           input.addEventListener('blur', commitRename);
           input.addEventListener('keydown', (ke) => {
-            if (ke.key === 'Enter') commitRename();
-            if (ke.key === 'Escape') this.updateLayersList();
+            ke.stopPropagation();
+            if (ke.key === 'Enter') {
+              ke.preventDefault();
+              commitRename();
+            } else if (ke.key === 'Escape') {
+              ke.preventDefault();
+              cancelRename();
+            }
           });
+        };
+
+        nameLabel.addEventListener('dblclick', startRename);
+        item.addEventListener('dblclick', (e) => {
+          if (e.target.closest('.layer-vis-btn') || e.target.closest('.layer-name-input')) return;
+          startRename(e);
         });
 
-        // Click item to activate layer
-        item.addEventListener('click', () => {
-          this.engine.layers.setActiveLayer(i);
-          this.updateLayersList();
+        // Click item to activate layer (non-destructive in-place state update)
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.layer-vis-btn') || e.target.closest('.layer-name-input')) return;
+          if (this.engine.layers.activeLayerIndex !== i) {
+            this.engine.layers.setActiveLayer(i);
+            container.querySelectorAll('.layer-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+            this.syncLayerDockHeader();
+          }
         });
 
         item.appendChild(eyeBtn);

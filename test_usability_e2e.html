@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PixelForge Studio - Creative Usability & Interactive Workflow E2E Test Suite</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      background: #141414;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 { font-size: 18px; margin-bottom: 8px; color: #fff; }
+    #status-summary {
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #252525;
+      border: 1px solid #383838;
+    }
+    .status-pass { background: rgba(46, 204, 113, 0.15); border-color: #2ecc71; color: #2ecc71; }
+    .status-fail { background: rgba(231, 76, 60, 0.15); border-color: #e74c3c; color: #e74c3c; }
+    .test-log {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 440px;
+      overflow-y: auto;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .test-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #1f1f1f;
+      border-radius: 3px;
+    }
+    .badge-pass { color: #2ecc71; font-weight: bold; }
+    .badge-fail { color: #e74c3c; font-weight: bold; }
+    iframe {
+      width: 1024px;
+      height: 720px;
+      border: 1px solid #333;
+      background: #1e1e1e;
+    }
+  </style>
+</head>
+<body>
+  <h1>PixelForge Studio — Creative Usability & Workflow E2E Test Suite</h1>
+  <div id="status-summary">Initializing Live Usability Environment...</div>
+  <div class="test-log" id="test-log"></div>
+  <iframe id="app-frame" src="index.html"></iframe>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const results = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        errors: []
+      };
+
+      const logEl = document.getElementById('test-log');
+      const summaryEl = document.getElementById('status-summary');
+      const frame = document.getElementById('app-frame');
+
+      function assert(cond, msg) {
+        if (!cond) throw new Error(msg || 'Assertion failed');
+      }
+      function assertEqual(actual, expected, msg) {
+        if (actual !== expected) throw new Error(`${msg ? msg + ': ' : ''}Expected [${expected}] but got [${actual}]`);
+      }
+
+      function logTest(name, ok, err) {
+        results.total++;
+        if (ok) {
+          results.passed++;
+          console.log('[USABILITY-PASS] ' + name);
+        } else {
+          results.failed++;
+          results.errors.push({ name, err: String(err) });
+          console.error('[USABILITY-FAIL] ' + name + ' : ' + err);
+        }
+
+        const div = document.createElement('div');
+        div.className = 'test-item';
+        div.innerHTML = `<span>${name}</span><span class="${ok ? 'badge-pass' : 'badge-fail'}">${ok ? '✓ PASS' : '✗ FAIL'}</span>`;
+        if (!ok && err) {
+          const detail = document.createElement('div');
+          detail.style.color = '#ff6b6b';
+          detail.style.fontSize = '11px';
+          detail.style.padding = '4px 10px';
+          detail.textContent = String(err);
+          div.appendChild(detail);
+        }
+        logEl.appendChild(div);
+      }
+
+      function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      frame.onload = async () => {
+        try {
+          await runAllUsabilityTests();
+        } catch (err) {
+          logTest('Test Runner Execution', false, err.message);
+        }
+
+        const summaryText = `Usability Test Run Complete: ${results.passed} / ${results.total} Passed (${results.failed} Failed)`;
+        summaryEl.textContent = summaryText;
+        summaryEl.className = results.failed === 0 ? 'status-pass' : 'status-fail';
+
+        console.log(`[USABILITY-SUMMARY] Total: ${results.total} | Passed: ${results.passed} | Failed: ${results.failed}`);
+        console.log('[USABILITY-COMPLETE]');
+        window.__USABILITY_RESULTS__ = results;
+        setTimeout(() => {
+          if (typeof window.close === 'function') window.close();
+        }, 150);
+      };
+
+      async function runAllUsabilityTests() {
+        const win = frame.contentWindow;
+        const doc = frame.contentDocument;
+
+        // Defensive mocks for blocking dialogs
+        win.confirm = () => true;
+        win.prompt = (msg, def) => def || 'PixelForge';
+
+        const PF = win.PixelForge;
+        if (!PF || !PF.currentEngine || !PF.currentUI) {
+          logTest('Environment Initialization', false, 'PixelForge engine or UI missing');
+          return;
+        }
+
+        const engine = PF.currentEngine;
+        const ui = PF.currentUI;
+        const overlayCanvas = doc.getElementById('overlay-canvas');
+        const mainCanvas = doc.getElementById('main-canvas');
+        assert(overlayCanvas && mainCanvas, 'Overlay and main canvases present in DOM');
+
+        // Helpers for simulating human canvas interactions
+        function dispatchCanvasPointer(type, canvasX, canvasY, button = 0) {
+          const screen = engine.canvasToScreen(canvasX, canvasY);
+          const pEvent = new win.PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            view: win,
+            clientX: screen.x,
+            clientY: screen.y,
+            button,
+            buttons: type === 'pointerup' ? 0 : 1,
+            pointerId: 1,
+            isPrimary: true
+          });
+          overlayCanvas.dispatchEvent(pEvent);
+
+          const mType = type.replace('pointer', 'mouse');
+          const mEvent = new win.MouseEvent(mType, {
+            bubbles: true,
+            cancelable: true,
+            view: win,
+            clientX: screen.x,
+            clientY: screen.y,
+            button,
+            buttons: type === 'mouseup' ? 0 : 1
+          });
+          overlayCanvas.dispatchEvent(mEvent);
+        }
+
+        function clickCanvas(canvasX, canvasY) {
+          dispatchCanvasPointer('pointerdown', canvasX, canvasY, 0);
+          dispatchCanvasPointer('pointerup', canvasX, canvasY, 0);
+          const screen = engine.canvasToScreen(canvasX, canvasY);
+          const clickEvt = new win.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: win,
+            clientX: screen.x,
+            clientY: screen.y,
+            button: 0
+          });
+          overlayCanvas.dispatchEvent(clickEvt);
+        }
+
+        // =====================================================================
+        // TEST 1: Tool 11 - Interactive Typography On-Canvas Editor Spawn
+        // =====================================================================
+        try {
+          ui.selectTool('text');
+          assertEqual(ui.activeTool.id, 'text', 'Text tool is active');
+
+          // Ensure options.text is empty so human interactive workflow triggers
+          ui.activeTool.options.text = '';
+
+          // Click at canvas (120, 140)
+          clickCanvas(120, 140);
+          await sleep(50);
+
+          const editor = doc.getElementById('canvas-text-editor') || doc.querySelector('.on-canvas-text-editor');
+          assert(editor, 'On-canvas floating typography editor spawned in DOM');
+          const textarea = editor.querySelector('textarea');
+          assert(textarea, 'Interactive textarea input is present in editor');
+          const toolbar = editor.querySelector('.text-editor-toolbar');
+          assert(toolbar, 'Typography toolbar HUD is present');
+
+          logTest('Tool 11: Typography Tool spawns interactive on-canvas editor on click', true);
+        } catch (e) {
+          logTest('Tool 11: Typography Tool spawns interactive on-canvas editor on click', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 2: Typography Editor Live Styling Feedback
+        // =====================================================================
+        try {
+          const editor = doc.getElementById('canvas-text-editor') || doc.querySelector('.on-canvas-text-editor');
+          assert(editor, 'Editor present for styling test');
+          const textarea = editor.querySelector('textarea');
+          const sizeInput = editor.querySelector('.text-editor-size-input');
+          const boldBtn = editor.querySelector('.text-editor-bold-btn');
+
+          if (sizeInput) {
+            sizeInput.value = '42';
+            sizeInput.dispatchEvent(new win.Event('input', { bubbles: true }));
+          }
+          if (boldBtn) {
+            boldBtn.click();
+          }
+          await sleep(30);
+
+          assert(textarea.style.fontWeight === 'bold', `Textarea reflects bold style: ${textarea.style.fontWeight}`);
+          const expectedSize = Math.max(12, Math.round(42 * (engine.zoom || 1)));
+          assert(Math.abs(parseInt(textarea.style.fontSize, 10) - expectedSize) <= 2, `Textarea font size scaled: ${textarea.style.fontSize} (expected approx ${expectedSize}px)`);
+
+          logTest('Tool 11: Live typography styling controls update textarea dynamically', true);
+        } catch (e) {
+          logTest('Tool 11: Live typography styling controls update textarea dynamically', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 3: Typography Typing & Enter Commit to Layer
+        // =====================================================================
+        try {
+          const editor = doc.getElementById('canvas-text-editor') || doc.querySelector('.on-canvas-text-editor');
+          assert(editor, 'Editor present for typing test');
+          const textarea = editor.querySelector('textarea');
+          const initialLayerCount = engine.layerManager.layers.length;
+
+          // Type custom user text
+          textarea.value = 'PixelForge Creative UX 2026';
+          textarea.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+          // Commit via Enter key
+          const enterEvent = new win.KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true,
+            cancelable: true
+          });
+          textarea.dispatchEvent(enterEvent);
+          await sleep(60);
+
+          // Assert editor is closed
+          const editorAfter = doc.getElementById('canvas-text-editor');
+          assert(!editorAfter, 'Editor cleanly dismissed after Enter commit');
+
+          // Assert text layer created
+          assertEqual(engine.layerManager.layers.length, initialLayerCount + 1, 'New typography layer added to stack');
+          const textLayer = engine.getActiveLayer();
+          assert(textLayer.name.includes('Type') || textLayer.name.includes('PixelForge'), `Layer name contains typography label: ${textLayer.name}`);
+          assert(textLayer.isTextLayer, 'Layer is marked as textLayer');
+          assert(textLayer.textData && textLayer.textData.text.includes('PixelForge Creative UX 2026'), 'Layer stores persistent typography textData metadata');
+
+          // Assert non-transparent text pixels were rasterized onto layer
+          const layerData = textLayer.ctx.getImageData(0, 0, engine.width, engine.height).data;
+          let hasPixels = false;
+          for (let i = 3; i < layerData.length; i += 4) {
+            if (layerData[i] > 20) {
+              hasPixels = true;
+              break;
+            }
+          }
+          assert(hasPixels, 'Typography glyphs rendered into layer pixel buffer');
+
+          logTest('Tool 11: Custom text typing and Enter commit creates rasterized typography layer', true);
+        } catch (e) {
+          logTest('Tool 11: Custom text typing and Enter commit creates rasterized typography layer', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 4: Typography Escape Cancellation Cleanliness
+        // =====================================================================
+        try {
+          const initialLayerCount = engine.layerManager.layers.length;
+          clickCanvas(250, 200);
+          await sleep(50);
+
+          const editor = doc.getElementById('canvas-text-editor') || doc.querySelector('.on-canvas-text-editor');
+          assert(editor, 'Editor opened for escape test');
+          const textarea = editor.querySelector('textarea');
+          textarea.value = 'Temporary text to cancel';
+          textarea.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+          // Press Escape
+          const escEvent = new win.KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            bubbles: true,
+            cancelable: true
+          });
+          textarea.dispatchEvent(escEvent);
+          await sleep(50);
+
+          assert(!doc.getElementById('canvas-text-editor'), 'Editor removed on Escape');
+          assertEqual(engine.layerManager.layers.length, initialLayerCount, 'No layer created when cancelled via Escape');
+
+          logTest('Tool 11: Escape key cancels typography session without altering document state', true);
+        } catch (e) {
+          logTest('Tool 11: Escape key cancels typography session without altering document state', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 5: Layer Dock - Double-Click In-Place Renaming Setup
+        // =====================================================================
+        try {
+          // Add a dedicated layer to test renaming
+          const testLayer = engine.addLayer('Vector Graphic', engine.width, engine.height, 'transparent');
+          ui.updateLayersList();
+          await sleep(40);
+
+          const layerList = doc.getElementById('layer-list-container');
+          assert(layerList, 'Layer list container present in right dock');
+          const layerItems = layerList.querySelectorAll('.layer-item');
+          assert(layerItems.length >= 2, 'Layer items rendered in UI dock');
+
+          // Find the item for Vector Graphic
+          let vectorItem = null;
+          let vectorNameLabel = null;
+          layerItems.forEach(item => {
+            const label = item.querySelector('.layer-name');
+            if (label && label.textContent.includes('Vector Graphic')) {
+              vectorItem = item;
+              vectorNameLabel = label;
+            }
+          });
+          assert(vectorItem && vectorNameLabel, 'Found Vector Graphic layer item in dock');
+
+          // Simulate double-click on name label
+          const dblClickEvt = new win.MouseEvent('dblclick', {
+            bubbles: true,
+            cancelable: true,
+            view: win
+          });
+          vectorNameLabel.dispatchEvent(dblClickEvt);
+          await sleep(40);
+
+          const input = vectorItem.querySelector('.layer-name-input');
+          assert(input, 'Double-click replaced layer-name span with .layer-name-input input field');
+          assertEqual(input.value, 'Vector Graphic', 'Input initial value matches layer name');
+
+          logTest('Layers Dock: Double-click replaces label with in-place rename input field', true);
+        } catch (e) {
+          logTest('Layers Dock: Double-click replaces label with in-place rename input field', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 6: Layer Dock - Enter Key Commits Layer Name
+        // =====================================================================
+        try {
+          const layerList = doc.getElementById('layer-list-container');
+          const input = layerList.querySelector('.layer-name-input');
+          assert(input, 'Active layer rename input field found');
+
+          input.value = 'Hero Concept Artwork';
+          input.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+          const enterKey = new win.KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true,
+            cancelable: true
+          });
+          input.dispatchEvent(enterKey);
+          await sleep(50);
+
+          // Check that input is gone and replaced by label with new name
+          assert(!layerList.querySelector('.layer-name-input'), 'Input dismissed after Enter commit');
+
+          // Check layer name in engine
+          const renamed = engine.layerManager.layers.find(l => l.name === 'Hero Concept Artwork');
+          assert(renamed, 'Layer name in engine updated to "Hero Concept Artwork"');
+
+          // Check history stack snapshot
+          const lastHistory = engine.history.snapshots[engine.history.currentIndex];
+          assert(lastHistory && lastHistory.description.includes('Rename Layer'), `History stack contains rename action: ${lastHistory ? lastHistory.description : 'none'}`);
+
+          logTest('Layers Dock: Enter key commits new layer name and pushes history snapshot', true);
+        } catch (e) {
+          logTest('Layers Dock: Enter key commits new layer name and pushes history snapshot', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 7: Layer Dock - Escape Key Cancels Rename In-Place
+        // =====================================================================
+        try {
+          const layerList = doc.getElementById('layer-list-container');
+          const heroItem = Array.from(layerList.querySelectorAll('.layer-item')).find(item => {
+            const label = item.querySelector('.layer-name');
+            return label && label.textContent.includes('Hero Concept Artwork');
+          });
+          assert(heroItem, 'Hero Concept Artwork item found');
+          const label = heroItem.querySelector('.layer-name');
+
+          // Double-click again
+          label.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true, cancelable: true, view: win }));
+          await sleep(30);
+
+          const input = heroItem.querySelector('.layer-name-input');
+          assert(input, 'Input opened for cancellation test');
+          input.value = 'Discarded Temporary Name';
+          input.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+          // Press Escape
+          input.dispatchEvent(new win.KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            bubbles: true,
+            cancelable: true
+          }));
+          await sleep(40);
+
+          assert(!layerList.querySelector('.layer-name-input'), 'Input dismissed on Escape');
+          const restoredLabel = Array.from(layerList.querySelectorAll('.layer-name')).find(l => l.textContent.includes('Hero Concept Artwork'));
+          assert(restoredLabel, 'Layer label restored to original name');
+          assert(!engine.layerManager.layers.some(l => l.name.includes('Discarded Temporary Name')), 'Discarded name was not committed to engine');
+
+          logTest('Layers Dock: Escape key cleanly cancels renaming without modifying layer name', true);
+        } catch (e) {
+          logTest('Layers Dock: Escape key cleanly cancels renaming without modifying layer name', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 8: Layer Dock - Double-Click Inactive Layer Activates & Renames
+        // =====================================================================
+        try {
+          // Switch active layer to Background (index 0)
+          engine.layerManager.setActiveLayer(0);
+          ui.updateLayersList();
+          await sleep(30);
+
+          assertEqual(engine.layerManager.activeLayerIndex, 0, 'Active layer is Background');
+
+          // Double click hero layer row
+          const layerList = doc.getElementById('layer-list-container');
+          const heroItem = Array.from(layerList.querySelectorAll('.layer-item')).find(item => {
+            const label = item.querySelector('.layer-name');
+            return label && label.textContent.includes('Hero Concept Artwork');
+          });
+          assert(heroItem, 'Hero item found in inactive state');
+          const label = heroItem.querySelector('.layer-name');
+
+          // First click activates
+          heroItem.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true, view: win }));
+          // Double click triggers rename without DOM wiping
+          label.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true, cancelable: true, view: win }));
+          await sleep(40);
+
+          const input = heroItem.querySelector('.layer-name-input');
+          assert(input, 'Double-clicking an inactive layer directly triggers in-place rename input');
+
+          // Cancel to clean up
+          input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+          logTest('Layers Dock: Double-clicking inactive layer activates and enters edit mode seamlessly', true);
+        } catch (e) {
+          logTest('Layers Dock: Double-clicking inactive layer activates and enters edit mode seamlessly', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 9: Undo / Redo Fidelity on Layer Renaming & Typography
+        // =====================================================================
+        try {
+          // Current state has Hero Concept Artwork
+          assert(engine.layerManager.layers.some(l => l.name === 'Hero Concept Artwork'), 'Hero layer exists before undo');
+
+          // Undo the rename
+          await engine.history.undo();
+          await sleep(40);
+
+          // Should revert back to Vector Graphic
+          const reverted = engine.layerManager.layers.find(l => l.name === 'Vector Graphic');
+          assert(reverted, 'Undo successfully reverted layer name to "Vector Graphic"');
+
+          // Redo the rename
+          await engine.history.redo();
+          await sleep(40);
+
+          const redone = engine.layerManager.layers.find(l => l.name === 'Hero Concept Artwork');
+          assert(redone, 'Redo successfully restored layer name to "Hero Concept Artwork"');
+
+          logTest('History Engine: Undo and Redo accurately reverse and replay layer rename operations', true);
+        } catch (e) {
+          logTest('History Engine: Undo and Redo accurately reverse and replay layer rename operations', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 10: Tool Options Dock Real-Time Responsiveness
+        // =====================================================================
+        try {
+          ui.selectTool('brush');
+          assertEqual(ui.activeTool.id, 'brush');
+
+          const optionsContainer = doc.getElementById('tool-options-container');
+          assert(optionsContainer, 'Tool options container present');
+          const sizeNumber = optionsContainer.querySelector('input[type="number"]');
+          assert(sizeNumber, 'Size number input present in options dock');
+
+          sizeNumber.value = '55';
+          sizeNumber.dispatchEvent(new win.Event('input', { bubbles: true }));
+          await sleep(30);
+
+          assertEqual(ui.activeTool.options.size, 55, 'Tool options updated immediately via number input without tool re-selection');
+
+          logTest('Tool Options: Number and slider inputs update tool parameters in real time', true);
+        } catch (e) {
+          logTest('Tool Options: Number and slider inputs update tool parameters in real time', false, e.message);
+        }
+
+        // =====================================================================
+        // TEST 11: Cross-Tool State Cleanliness on Tool Switch
+        // =====================================================================
+        try {
+          ui.selectTool('text');
+          clickCanvas(60, 60);
+          await sleep(40);
+
+          assert(doc.getElementById('canvas-text-editor'), 'Text editor active before tool switch');
+          const textarea = doc.querySelector('#canvas-text-editor textarea');
+          textarea.value = 'Auto Committed On Tool Switch';
+          textarea.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+          // Switch to brush
+          ui.selectTool('brush');
+          await sleep(50);
+
+          assert(!doc.getElementById('canvas-text-editor'), 'Active editor cleanly removed upon switching tools');
+          const committedTextLayer = engine.layerManager.layers.find(l => l.name.includes('Auto Committed'));
+          assert(committedTextLayer, 'Text entered was preserved and committed on tool deactivation');
+
+          logTest('Cross-Tool State: Switching active tool safely commits text without orphaned overlays', true);
+        } catch (e) {
+          logTest('Cross-Tool State: Switching active tool safely commits text without orphaned overlays', false, e.message);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
