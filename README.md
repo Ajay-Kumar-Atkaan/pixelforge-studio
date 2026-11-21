@@ -2,6 +2,8 @@
 
 PixelForge Studio is an open-source, client-side digital raster graphics editor that runs entirely in the browser using HTML5 Canvas, JavaScript (ES6+), and CSS. It requires no installation, external build systems, or server dependencies.
 
+![PixelForge Studio Live Drawing & Tools Demo](assets/demo-brush-tools.gif)
+
 This project was built as an open-source benchmark to test and demonstrate autonomous multi-agent software engineering capabilities using AI agent swarms.
 
 ---
@@ -9,6 +11,8 @@ This project was built as an open-source benchmark to test and demonstrate auton
 ## Inspiration & Goals
 
 Digital raster graphic suites traditionally require large native desktop runtimes to execute layer blending, convolution filtering, and pixel manipulation. PixelForge Studio explores whether these creative workflows can run entirely inside modern web browsers using standard web technologies.
+
+![PixelForge Studio Canvas Crop & Live Filter Preview](assets/demo-crop-filter.gif)
 
 Inspired by classic open-source raster graphics tools, PixelForge Studio implements:
 - Multi-layer compositing with 16 distinct blend modes.
