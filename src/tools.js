@@ -69,6 +69,8 @@
       };
 
       range.addEventListener('input', (e) => update(e.target.value));
+      range.addEventListener('change', (e) => update(e.target.value));
+      num.addEventListener('input', (e) => update(e.target.value));
       num.addEventListener('change', (e) => update(e.target.value));
       return group;
     }
@@ -86,10 +88,12 @@
         </div>
       `;
       const select = group.querySelector('select');
-      select.addEventListener('change', (e) => {
+      const handleSelectChange = (e) => {
         this.options[key] = e.target.value;
         if (onChange) onChange(key, e.target.value);
-      });
+      };
+      select.addEventListener('change', handleSelectChange);
+      select.addEventListener('input', handleSelectChange);
       return group;
     }
 
@@ -105,10 +109,12 @@
         </div>
       `;
       const cb = group.querySelector('input[type="checkbox"]');
-      cb.addEventListener('change', (e) => {
+      const handleCheckboxChange = (e) => {
         this.options[key] = e.target.checked;
         if (onChange) onChange(key, e.target.checked);
-      });
+      };
+      cb.addEventListener('change', handleCheckboxChange);
+      cb.addEventListener('input', handleCheckboxChange);
       return group;
     }
   }
@@ -1275,12 +1281,20 @@
         fontSize: 28,
         bold: false,
         italic: false,
-        text: 'PixelForge Studio'
+        text: ''
       };
+      this.activeEditor = null;
     }
 
     renderOptions(container, onChange) {
       container.innerHTML = '';
+      const handleOptionChange = (k, v) => {
+        if (this.activeEditor && typeof this.activeEditor.updateStyle === 'function') {
+          this.activeEditor.updateStyle();
+        }
+        if (onChange) onChange(k, v);
+      };
+
       container.appendChild(this.createSelect('Typeface Family', 'fontFamily', [
         { label: 'Sans-Serif', value: 'sans-serif' },
         { label: 'Serif', value: 'serif' },
@@ -1288,47 +1302,288 @@
         { label: 'Arial', value: 'Arial, sans-serif' },
         { label: 'Times New Roman', value: '"Times New Roman", serif' },
         { label: 'Impact', value: 'Impact, sans-serif' }
-      ], this.options.fontFamily, onChange));
+      ], this.options.fontFamily, handleOptionChange));
 
-      container.appendChild(this.createSlider('Type Size', 'fontSize', 8, 144, 1, this.options.fontSize, 'px', onChange));
-      container.appendChild(this.createCheckbox('Bold Weight', 'bold', this.options.bold, onChange));
-      container.appendChild(this.createCheckbox('Italic Oblique', 'italic', this.options.italic, onChange));
+      container.appendChild(this.createSlider('Type Size', 'fontSize', 8, 144, 1, this.options.fontSize, 'px', handleOptionChange));
+      container.appendChild(this.createCheckbox('Bold Weight', 'bold', this.options.bold, handleOptionChange));
+      container.appendChild(this.createCheckbox('Italic Oblique', 'italic', this.options.italic, handleOptionChange));
 
-      const group = document.createElement('div');
-      group.className = 'opt-group';
-      group.innerHTML = `
-        <div class="opt-label">Text Content:</div>
-        <textarea style="width:100%;height:60px;margin-top:4px;" placeholder="Type text here...">${this.options.text}</textarea>
-      `;
-      const textarea = group.querySelector('textarea');
-      textarea.addEventListener('input', (e) => {
-        this.options.text = e.target.value;
-      });
-      container.appendChild(group);
+      const hint = document.createElement('div');
+      hint.className = 'opt-group';
+      hint.style.fontSize = '11px';
+      hint.style.color = '#888';
+      hint.style.lineHeight = '1.4';
+      hint.style.marginTop = '8px';
+      hint.innerHTML = 'Click anywhere on canvas to open the <strong>interactive on-canvas typography editor</strong>. Press <strong>Enter</strong> to commit or <strong>Escape</strong> to cancel.';
+      container.appendChild(hint);
+    }
+
+    commitText(text, coords, engine) {
+      if (!text || !String(text).trim()) return null;
+      const cleanText = String(text).trim();
+      const fontFam = this.options.fontFamily || 'sans-serif';
+      const fontSize = parseInt(this.options.fontSize, 10) || 28;
+      const bold = !!this.options.bold;
+      const italic = !!this.options.italic;
+      const color = (engine && engine.fgColor) || '#ffffff';
+      const posX = coords && coords.x !== undefined ? coords.x : 20;
+      const posY = coords && coords.y !== undefined ? coords.y : 20;
+
+      let layer = null;
+      if (engine && typeof engine.addTextLayer === 'function') {
+        layer = engine.addTextLayer({
+          text: cleanText,
+          fontFamily: fontFam,
+          fontSize: fontSize,
+          bold: bold,
+          italic: italic,
+          color: color,
+          x: posX,
+          y: posY,
+          name: `Type: ${cleanText.slice(0, 15)}`
+        });
+      } else if (engine) {
+        layer = engine.addLayer(`Type: ${cleanText.slice(0, 15)}`);
+        layer.isTextLayer = true;
+        layer.textData = {
+          text: cleanText,
+          fontFamily: fontFam,
+          fontSize: fontSize,
+          bold: bold,
+          italic: italic,
+          color: color,
+          x: posX,
+          y: posY
+        };
+        if (typeof layer.renderText === 'function') {
+          layer.renderText();
+        } else {
+          layer.ctx.save();
+          const style = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${fontSize}px ${fontFam}`;
+          layer.ctx.font = style;
+          layer.ctx.fillStyle = color;
+          layer.ctx.textBaseline = 'top';
+          layer.ctx.fillText(cleanText, posX, posY);
+          layer.ctx.restore();
+        }
+        if (engine.history && typeof engine.history.push === 'function') {
+          engine.history.push(`Add Text: "${cleanText.slice(0, 15)}"`);
+        }
+        if (typeof engine.render === 'function') {
+          engine.render();
+        }
+      }
+      return layer;
     }
 
     onPointerDown(e, coords, engine) {
       if (e.button !== 0) return;
-      let text = this.options.text;
-      if (!text && typeof window !== 'undefined' && typeof window.prompt === 'function') {
-        try {
-          text = window.prompt('Enter typography text to rasterize:', 'PixelForge');
-        } catch (_) {}
+
+      // Programmatic branch: when options.text is pre-set (for automated live canvas / cross-feature test suites)
+      if (this.options.text && String(this.options.text).trim().length > 0) {
+        const preText = String(this.options.text).trim();
+        this.commitText(preText, coords, engine);
+        this.options.text = '';
+        return;
       }
-      text = text || 'PixelForge';
-      this.options.text = text;
 
-      const layer = engine.addLayer(`Type: ${text.slice(0, 10)}`);
-      layer.ctx.save();
-      const style = `${this.options.italic ? 'italic ' : ''}${this.options.bold ? 'bold ' : ''}${this.options.fontSize}px ${this.options.fontFamily}`;
-      layer.ctx.font = style;
-      layer.ctx.fillStyle = engine.fgColor;
-      layer.ctx.textBaseline = 'top';
-      layer.ctx.fillText(text, coords.x, coords.y);
-      layer.ctx.restore();
+      // Interactive branch: open on-canvas floating typography editor
+      this.openOnCanvasEditor(coords, engine);
+    }
 
-      engine.history.push('Rasterize Typography');
-      engine.render();
+    openOnCanvasEditor(coords, engine) {
+      if (this.activeEditor) {
+        this.activeEditor.commit();
+      }
+
+      const self = this;
+      const ui = (typeof window !== 'undefined' && window.PixelForge && window.PixelForge.currentUI) || (engine && engine.ui);
+      const viewport = (ui && ui.canvasViewport) || document.getElementById('canvas-scroll-container') || document.body;
+
+      const screenPos = (engine && typeof engine.canvasToScreen === 'function')
+        ? engine.canvasToScreen(coords.x, coords.y)
+        : { x: coords.x, y: coords.y };
+
+      const overlay = document.createElement('div');
+      overlay.className = 'on-canvas-text-editor canvas-text-overlay';
+      overlay.id = 'canvas-text-editor';
+      overlay.style.position = 'absolute';
+      overlay.style.left = `${Math.round(screenPos.x)}px`;
+      overlay.style.top = `${Math.round(screenPos.y)}px`;
+      overlay.style.zIndex = '1000';
+      overlay.dataset.x = String(coords.x);
+      overlay.dataset.y = String(coords.y);
+      overlay.dataset.screenX = String(Math.round(screenPos.x));
+      overlay.dataset.screenY = String(Math.round(screenPos.y));
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'text-editor-toolbar';
+      toolbar.innerHTML = `
+        <select class="text-editor-font-select" title="Typeface Family">
+          <option value="sans-serif">Sans-Serif</option>
+          <option value="serif">Serif</option>
+          <option value="monospace">Monospace</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="Impact, sans-serif">Impact</option>
+        </select>
+        <input type="number" class="text-editor-size-input" min="8" max="144" value="${this.options.fontSize || 28}" title="Type Size (px)">
+        <button type="button" class="text-editor-bold-btn ${this.options.bold ? 'active' : ''}" title="Toggle Bold"><b>B</b></button>
+        <button type="button" class="text-editor-italic-btn ${this.options.italic ? 'active' : ''}" title="Toggle Italic"><i>I</i></button>
+        <input type="color" class="text-editor-color-picker" value="${(engine && engine.fgColor) || '#ffffff'}" title="Text Color">
+        <button type="button" class="text-editor-commit-btn" title="Commit Text (Enter)" style="color:#57bb8a;font-weight:bold;">✓</button>
+        <button type="button" class="text-editor-cancel-btn" title="Cancel (Esc)" style="color:#ff6b6b;font-weight:bold;">✕</button>
+      `;
+
+      const textarea = document.createElement('textarea');
+      textarea.className = 'text-editor-input-box canvas-text-input';
+      textarea.placeholder = 'Type text here... (Enter to commit, Esc to cancel)';
+      textarea.value = this.options.text || '';
+      textarea.rows = 2;
+
+      const fontSelect = toolbar.querySelector('.text-editor-font-select');
+      const sizeInput = toolbar.querySelector('.text-editor-size-input');
+      const boldBtn = toolbar.querySelector('.text-editor-bold-btn');
+      const italicBtn = toolbar.querySelector('.text-editor-italic-btn');
+      const colorPicker = toolbar.querySelector('.text-editor-color-picker');
+      const commitBtn = toolbar.querySelector('.text-editor-commit-btn');
+      const cancelBtn = toolbar.querySelector('.text-editor-cancel-btn');
+
+      if (fontSelect) fontSelect.value = this.options.fontFamily || 'sans-serif';
+
+      const updateInputStyle = () => {
+        const zoom = (engine && engine.zoom) || 1;
+        const currentSize = parseInt(self.options.fontSize, 10) || 28;
+        const scaledSize = Math.max(12, Math.round(currentSize * zoom));
+        textarea.style.fontFamily = self.options.fontFamily || 'sans-serif';
+        textarea.style.fontSize = `${scaledSize}px`;
+        textarea.style.fontWeight = self.options.bold ? 'bold' : 'normal';
+        textarea.style.fontStyle = self.options.italic ? 'italic' : 'normal';
+        textarea.style.color = (engine && engine.fgColor) || '#ffffff';
+        overlay.style.fontFamily = textarea.style.fontFamily;
+        overlay.style.fontSize = textarea.style.fontSize;
+        if (sizeInput) sizeInput.value = currentSize;
+        if (boldBtn) boldBtn.classList.toggle('active', !!self.options.bold);
+        if (italicBtn) italicBtn.classList.toggle('active', !!self.options.italic);
+        if (fontSelect) fontSelect.value = self.options.fontFamily || 'sans-serif';
+        if (colorPicker) colorPicker.value = (engine && engine.fgColor) || '#ffffff';
+      };
+
+      updateInputStyle();
+
+      overlay.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+      overlay.addEventListener('mousedown', (ev) => ev.stopPropagation());
+      overlay.addEventListener('click', (ev) => ev.stopPropagation());
+      overlay.addEventListener('dblclick', (ev) => ev.stopPropagation());
+
+      fontSelect.addEventListener('change', (ev) => {
+        self.options.fontFamily = ev.target.value;
+        updateInputStyle();
+        if (ui && typeof ui.updateToolOptions === 'function') ui.updateToolOptions();
+      });
+
+      sizeInput.addEventListener('input', (ev) => {
+        self.options.fontSize = parseInt(ev.target.value, 10) || 28;
+        updateInputStyle();
+        if (ui && typeof ui.updateToolOptions === 'function') ui.updateToolOptions();
+      });
+
+      boldBtn.addEventListener('click', () => {
+        self.options.bold = !self.options.bold;
+        updateInputStyle();
+        if (ui && typeof ui.updateToolOptions === 'function') ui.updateToolOptions();
+      });
+
+      italicBtn.addEventListener('click', () => {
+        self.options.italic = !self.options.italic;
+        updateInputStyle();
+        if (ui && typeof ui.updateToolOptions === 'function') ui.updateToolOptions();
+      });
+
+      colorPicker.addEventListener('input', (ev) => {
+        if (engine && typeof engine.setFgColor === 'function') {
+          engine.setFgColor(ev.target.value);
+        }
+        updateInputStyle();
+      });
+
+      let isClosed = false;
+      const commit = () => {
+        if (isClosed) return;
+        isClosed = true;
+        const text = textarea.value.trim();
+        if (text) {
+          self.commitText(text, coords, engine);
+          if (ui && typeof ui.showToast === 'function') {
+            ui.showToast(`Added text layer "${text.slice(0, 15)}"`, 'info');
+          }
+        }
+        close();
+      };
+
+      const cancel = () => {
+        if (isClosed) return;
+        isClosed = true;
+        close();
+      };
+
+      const close = () => {
+        if (overlay && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        if (self.activeEditor && self.activeEditor.overlay === overlay) {
+          self.activeEditor = null;
+        }
+      };
+
+      commitBtn.addEventListener('click', commit);
+      cancelBtn.addEventListener('click', cancel);
+
+      textarea.addEventListener('keydown', (ke) => {
+        ke.stopPropagation();
+        if (ke.key === 'Enter' && !ke.shiftKey) {
+          ke.preventDefault();
+          commit();
+        } else if (ke.key === 'Escape') {
+          ke.preventDefault();
+          cancel();
+        }
+      });
+
+      textarea.addEventListener('input', () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.max(48, textarea.scrollHeight)}px`;
+      });
+
+      overlay.appendChild(toolbar);
+      overlay.appendChild(textarea);
+      viewport.appendChild(overlay);
+
+      this.activeEditor = {
+        overlay,
+        textarea,
+        coords,
+        updateStyle: updateInputStyle,
+        commit,
+        cancel,
+        close
+      };
+
+      setTimeout(() => {
+        textarea.focus();
+        textarea.select();
+      }, 0);
+    }
+
+    deactivate() {
+      if (this.activeEditor) {
+        if (this.activeEditor.textarea && this.activeEditor.textarea.value.trim().length > 0) {
+          this.activeEditor.commit();
+        } else {
+          this.activeEditor.close();
+        }
+        this.activeEditor = null;
+      }
     }
 
     onPointerMove(e, coords, engine) {

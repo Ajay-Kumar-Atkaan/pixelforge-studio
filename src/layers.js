@@ -67,6 +67,8 @@
       this.blendMode = options.blendMode || 'normal';
       this.locked = !!options.locked;
       this.alphaLocked = !!options.alphaLocked;
+      this.isTextLayer = options.isTextLayer !== undefined ? !!options.isTextLayer : !!(options.textData && options.textData.text);
+      this.textData = options.textData ? JSON.parse(JSON.stringify(options.textData)) : null;
 
       // Create internal canvas
       this.canvas = document.createElement('canvas');
@@ -210,6 +212,36 @@
     }
 
     /**
+     * Re-renders text content if this layer contains text metadata.
+     */
+    renderText(textData = null) {
+      if (textData) {
+        this.textData = Object.assign({}, this.textData || {}, textData);
+      }
+      if (!this.textData || !this.textData.text) return;
+      this.isTextLayer = true;
+
+      this.clear();
+      this.ctx.save();
+      const td = this.textData;
+      const fontSize = parseInt(td.fontSize, 10) || 28;
+      const style = `${td.italic ? 'italic ' : ''}${td.bold ? 'bold ' : ''}${fontSize}px ${td.fontFamily || 'sans-serif'}`;
+      this.ctx.font = style;
+      this.ctx.fillStyle = td.color || '#000000';
+      this.ctx.textBaseline = 'top';
+
+      const lines = String(td.text).split('\n');
+      const lineHeight = Math.round(fontSize * 1.25);
+      const startX = td.x !== undefined ? td.x : 20;
+      const startY = td.y !== undefined ? td.y : 20;
+
+      for (let i = 0; i < lines.length; i++) {
+        this.ctx.fillText(lines[i], startX, startY + (i * lineHeight));
+      }
+      this.ctx.restore();
+    }
+
+    /**
      * Deep clone this layer.
      */
     clone() {
@@ -223,7 +255,9 @@
         opacity: this.opacity,
         blendMode: this.blendMode,
         locked: this.locked,
-        alphaLocked: this.alphaLocked
+        alphaLocked: this.alphaLocked,
+        isTextLayer: !!this.isTextLayer,
+        textData: this.textData ? JSON.parse(JSON.stringify(this.textData)) : null
       });
       cloned.ctx.drawImage(this.canvas, 0, 0);
       return cloned;
@@ -281,6 +315,8 @@
         blendMode: this.blendMode,
         locked: this.locked,
         alphaLocked: this.alphaLocked,
+        isTextLayer: !!this.isTextLayer,
+        textData: this.textData ? JSON.parse(JSON.stringify(this.textData)) : null,
         dataUrl: this.toDataURL('image/png')
       };
     }
@@ -300,7 +336,9 @@
         opacity: data.opacity,
         blendMode: data.blendMode,
         locked: data.locked,
-        alphaLocked: data.alphaLocked
+        alphaLocked: data.alphaLocked,
+        isTextLayer: data.isTextLayer,
+        textData: data.textData
       });
 
       if (data.dataUrl) {
@@ -330,6 +368,7 @@
       this.layers = [];
       this.activeLayerIndex = -1;
       this.listeners = new Map();
+      this.engine = null;
 
       // Start with a default Background layer
       this.addLayer('Background', width, height, 'white');
@@ -654,11 +693,47 @@
       }
     }
 
-    renameLayer(index, newName) {
-      if (index >= 0 && index < this.layers.length && newName) {
-        this.layers[index].name = String(newName).trim();
-        this.emit('changed');
+    getLayerById(id) {
+      return this.layers.find(l => l.id === id) || null;
+    }
+
+    renameLayer(layerIdOrIndex, newName) {
+      if (!newName || !String(newName).trim()) return false;
+      let layer = null;
+      let idx = -1;
+      if (typeof layerIdOrIndex === 'number') {
+        idx = layerIdOrIndex;
+        layer = this.layers[idx];
+      } else if (typeof layerIdOrIndex === 'string') {
+        idx = this.layers.findIndex(l => l.id === layerIdOrIndex);
+        if (idx === -1) {
+          idx = this.layers.findIndex(l => l.name === layerIdOrIndex);
+        }
+        if (idx !== -1) layer = this.layers[idx];
+      } else if (layerIdOrIndex && layerIdOrIndex.id) {
+        idx = this.layers.findIndex(l => l.id === layerIdOrIndex.id);
+        if (idx !== -1) layer = this.layers[idx];
       }
+
+      if (!layer) {
+        idx = this.activeLayerIndex;
+        layer = this.getActiveLayer();
+      }
+      if (!layer) return false;
+
+      const oldName = layer.name;
+      const cleanName = String(newName).trim();
+      if (oldName === cleanName) return true;
+
+      layer.name = cleanName;
+      this.emit('layerRenamed', { layer, index: idx, oldName, newName: cleanName });
+      this.emit('changed');
+
+      if (this.engine && this.engine.history && !this._suppressHistory) {
+        this.engine.history.push(`Rename Layer: "${oldName}" -> "${cleanName}"`);
+        if (this.engine.render) this.engine.render();
+      }
+      return true;
     }
 
     /**
