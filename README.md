@@ -2,17 +2,37 @@
 
 PixelForge Studio is an open-source, client-side digital raster graphics editor that runs entirely in the browser using HTML5 Canvas, JavaScript (ES6+), and CSS. It requires no installation, external build systems, or server dependencies.
 
+This project was built as an open-source benchmark to test and demonstrate autonomous multi-agent software engineering capabilities using AI agent swarms.
+
+---
+
+## 🎬 Live Demos & Feature Showcase
+
+### 1. Interactive Drawing, Flood Fill & Marquee Selection
+Continuous soft brush strokes with edge hardness, flood fills with color tolerance, 1px pixel writing, and antialiased selection with animated marching ants:
+
 ![PixelForge Studio Live Drawing & Tools Demo](assets/demo-brush-tools.gif)
 
-This project was built as an open-source benchmark to test and demonstrate autonomous multi-agent software engineering capabilities using AI agent swarms.
+### 2. Photo Color Grading, Levels & Tonal Adjustments
+Non-destructive photo editing with 8-bit Brightness & Contrast LUTs, HSL saturation boosting, histogram Levels with gamma curve mapping, and cinematic vignette:
+
+![PixelForge Studio Photo Color Adjustments Demo](assets/demo-color-adjustments.gif)
+
+### 3. Multi-Layer Photo Compositing & 16 Blend Modes
+Multi-layer workflows with real-time blend mode switching (`Multiply`, `Screen`, `Overlay`, `Color Dodge`), layer opacity tuning, and typography rasterization:
+
+![PixelForge Studio Layer Compositing & Blend Modes Demo](assets/demo-layer-compositing.gif)
+
+### 4. Canvas Frame Trimming & Live Filter Previews
+Interactive 8-handle crop framing with rule-of-thirds grid, canvas document resizing, and modal filter dialogs with live canvas preview toggles:
+
+![PixelForge Studio Canvas Crop & Live Filter Preview](assets/demo-crop-filter.gif)
 
 ---
 
 ## Inspiration & Goals
 
 Digital raster graphic suites traditionally require large native desktop runtimes to execute layer blending, convolution filtering, and pixel manipulation. PixelForge Studio explores whether these creative workflows can run entirely inside modern web browsers using standard web technologies.
-
-![PixelForge Studio Canvas Crop & Live Filter Preview](assets/demo-crop-filter.gif)
 
 Inspired by classic open-source raster graphics tools, PixelForge Studio implements:
 - Multi-layer compositing with 16 distinct blend modes.
